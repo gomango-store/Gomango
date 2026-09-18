@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>본사 발주 - GOMANGO 점주 운영 게시판</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <div id="gnb"></div>
+
+  <main class="page-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">본사 발주</h1>
+        <p class="page-subtitle">배망 / 유니폼 / 바스켓 등 발주를 요청하면 담당자가 발주 확인 후 댓글로 안내드려요.</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button id="priceSettingBtn" class="btn-outline hidden">발주 금액 설정</button>
+        <button id="writeBtn" class="btn-primary">+ 발주 요청하기</button>
+      </div>
+    </div>
+
+    <div class="bank-notice-box">※ 고망고 입금 계좌 : <strong>신한은행 100-037-181930</strong>
+※ 출고 및 발주처리 - 12시 이전 입금 확인 주문건</div>
+
+    <div id="writeForm" class="form-card hidden">
+      <div id="orderRows" style="display:flex; flex-direction:column; gap:12px;"></div>
+      <button id="addRowBtn" type="button" class="btn-primary" style="align-self:flex-start; width:fit-content;">+ 추가 요청 (최대 5개)</button>
+      <div class="order-total" id="estimatedTotal"></div>
+      <div id="formError" class="error-text hidden"></div>
+      <div style="display:flex; gap:10px;">
+        <button id="submitBtn" class="btn-primary">등록</button>
+        <button id="cancelBtn" class="btn-link">취소</button>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:8px;" id="statusTabs"></div>
+
+    <div id="orderList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
+  </main>
+
+  <!-- 바이저 전용: 발주 금액 설정 모달 -->
+  <div id="priceModalBackdrop" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span style="font-size:17px; font-weight:700;">본사 발주 금액 설정</span>
+        <button id="priceModalCloseBtn" class="btn-link">닫기</button>
+      </div>
+      <p style="font-size:12.5px; color:var(--muted); margin:0;">품목별 단가(원)를 입력하세요. 총 금액은 "단가 × 선택한 수량/단위 숫자"로 계산됩니다 (사이즈처럼 숫자가 아닌 옵션은 1개로 계산돼요).</p>
+      <div id="priceRows"></div>
+      <div id="priceModalError" class="error-text hidden"></div>
+      <button id="priceSaveBtn" class="btn-primary">저장</button>
+    </div>
+  </div>
+
+  <script src="assets/supabaseClient.js?v=20260918a"></script>
+  <script src="assets/app.js?v=20260918a"></script>
+  <script>
+    // 발주 가능 품목 목록 (필요하면 이 배열만 수정하면 됩니다)
+    // extraQty가 있는 품목은 "사이즈 선택 + 수량 선택"을 함께 보여줍니다.
+    const ORDER_CATALOG = [
+      { name: "배망 (2000EA/BOX)", unitLabel: "수량", options: ["1박스", "2박스", "3박스", "4박스", "5박스"] },
+      { name: "반팔티셔츠", unitLabel: "Size(사이즈)", options: ["95", "100", "105"], extraQty: { label: "수량", options: ["1개", "2개", "3개", "4개", "5개"] } },
+      { name: "앞치마 (검정/FREE)", unitLabel: "수량", options: ["1개", "2개", "3개", "4개", "5개"] },
+      { name: "스냅백 (노랑/FREE)", unitLabel: "수량", options: ["1개", "2개", "3개", "4개", "5개"] },
+      { name: "맨투맨", unitLabel: "Size(사이즈)", options: ["95", "100", "105"], extraQty: { label: "수량", options: ["1개", "2개", "3개", "4개", "5개"] } },
+      { name: "무지 1구 비닐캐리어 (200EA/PK)", unitLabel: "수량/단위", options: ["1팩", "2팩", "3팩", "4팩", "5팩"], note: "★ 고망고 무지 1구, 2구 비닐캐리어는 합산 4PK부터 주문 가능 ★" },
+      { name: "무지 2구 비닐캐리어 (200EA/PK)", unitLabel: "수량/단위", options: ["1팩", "2팩", "3팩", "4팩", "5팩"], note: "★ 고망고 무지 1구, 2구 비닐캐리어는 합산 4PK부터 주문 가능 ★" },
+    ];
+    const MAX_ORDER_ROWS = 5;
+    function catalogItem(name) {
+      return ORDER_CATALOG.find((c) => c.name === name) || ORDER_CATALOG[0];
+    }
+
+    let profileRef = null;
+    let allOrders = [];
+    let currentStatus = "전체";
+    let editingId = null;
+    let priceMap = {}; // { 품목명: 단가 }
+    let formRows = [1]; // 작성 폼의 행 id 목록 (수정 모드일 땐 항상 1개만 사용)
+    let nextRowId = 2;
+
+    // ---------- 작성 폼: 여러 물품 행 ----------
+    // 행을 다시 그리기 전에 현재 선택되어 있던 값들을 저장해둡니다 (추가 요청 시 기존 선택이 초기화되는 오류 방지)
+    function captureRowState() {
+      const state = {};
+      formRows.forEach((rowId) => {
+        const itemEl = document.getElementById(`f_item_${rowId}`);
+        if (!itemEl) return;
+        const qtyEl = document.getElementById(`f_qty_${rowId}`);
+        const qty2El = document.getElementById(`f_qty2_${rowId}`);
+        state[rowId] = {
+          item: itemEl.value,
+          qty: qtyEl ? qtyEl.value : null,
+          qty2: qty2El ? qty2El.value : null,
+        };
+      });
+      return state;
+    }
+
+    function renderFormRows() {
+      const prevState = captureRowState();
+      const wrap = document.getElementById("orderRows");
+      wrap.innerHTML = formRows.map((rowId) => `
+        <div class="order-row" data-row="${rowId}">
+          ${formRows.length > 1 ? `<button type="button" class="order-row-remove" data-row="${rowId}">✕</button>` : ""}
+          <div class="form-row">
+            <div class="form-field" style="flex:2;">
+              <label>필요한 물품</label>
+              <select id="f_item_${rowId}" class="row-item"></select>
+            </div>
+            <div class="form-field">
+              <label id="qtyLabel_${rowId}">수량/단위</label>
+              <select id="f_qty_${rowId}" class="row-qty"></select>
+            </div>
+            <div class="form-field extra-qty-field hidden" id="extraQtyWrap_${rowId}">
+              <label id="qtyLabel2_${rowId}">수량</label>
+              <select id="f_qty2_${rowId}" class="row-qty2"></select>
+            </div>
+          </div>
+          <div id="qtyNote_${rowId}" class="order-note hidden"></div>
+        </div>
+      `).join("");
+
+      formRows.forEach((rowId) => {
+        const saved = prevState[rowId];
+        populateItemSelect(rowId);
+        if (saved && saved.item) {
+          document.getElementById(`f_item_${rowId}`).value = saved.item;
+        }
+        refreshRowQtyField(rowId, saved);
+        document.getElementById(`f_item_${rowId}`).addEventListener("change", () => refreshRowQtyField(rowId));
+        document.getElementById(`f_qty_${rowId}`).addEventListener("change", refreshEstimatedTotal);
+        document.getElementById(`f_qty2_${rowId}`).addEventListener("change", refreshEstimatedTotal);
+      });
+      wrap.querySelectorAll(".order-row-remove").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          formRows = formRows.filter((id) => id !== Number(btn.dataset.row));
+          renderFormRows();
+          refreshAddRowBtn();
+          refreshEstimatedTotal();
+        });
+      });
+      refreshAddRowBtn();
+    }
+
+    function refreshAddRowBtn() {
+      const btn = document.getElementById("addRowBtn");
+      btn.classList.toggle("hidden", formRows.length >= MAX_ORDER_ROWS);
+    }
+
+    function populateItemSelect(rowId) {
+      const sel = document.getElementById(`f_item_${rowId}`);
+      sel.innerHTML = ORDER_CATALOG.map((c) => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join("");
+    }
+
+    // savedState가 있으면(행을 다시 그리는 경우) 이전에 선택했던 수량/단위 값을 그대로 복원합니다.
+    function refreshRowQtyField(rowId, savedState) {
+      const itemName = document.getElementById(`f_item_${rowId}`).value;
+      const item = catalogItem(itemName);
+      document.getElementById(`qtyLabel_${rowId}`).textContent = item.unitLabel;
+      document.getElementById(`f_qty_${rowId}`).innerHTML = item.options.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
+      if (savedState && savedState.qty && item.options.includes(savedState.qty)) {
+        document.getElementById(`f_qty_${rowId}`).value = savedState.qty;
+      }
+
+      const extraWrap = document.getElementById(`extraQtyWrap_${rowId}`);
+      if (item.extraQty) {
+        document.getElementById(`qtyLabel2_${rowId}`).textContent = item.extraQty.label;
+        document.getElementById(`f_qty2_${rowId}`).innerHTML = item.extraQty.options.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
+        if (savedState && savedState.qty2 && item.extraQty.options.includes(savedState.qty2)) {
+          document.getElementById(`f_qty2_${rowId}`).value = savedState.qty2;
+        }
+        extraWrap.classList.remove("hidden");
+      } else {
+        extraWrap.classList.add("hidden");
+      }
+
+      const noteEl = document.getElementById(`qtyNote_${rowId}`);
+      if (item.note) {
+        noteEl.textContent = item.note;
+        noteEl.classList.remove("hidden");
+      } else {
+        noteEl.classList.add("hidden");
+      }
+      refreshEstimatedTotal();
+    }
+
+    // 한 행의 최종 수량 문자열을 만듭니다 (extraQty가 있으면 "95 / 3개" 형태)
+    function getRowQuantityString(rowId) {
+      const itemName = document.getElementById(`f_item_${rowId}`).value;
+      const item = catalogItem(itemName);
+      const qty = document.getElementById(`f_qty_${rowId}`).value;
+      if (item.extraQty) {
+        const qty2 = document.getElementById(`f_qty2_${rowId}`).value;
+        return `${qty} / ${qty2}`;
+      }
+      return qty;
+    }
+
+    function refreshEstimatedTotal() {
+      let total = 0;
+      const rows = [];
+      formRows.forEach((rowId) => {
+        const itemSel = document.getElementById(`f_item_${rowId}`);
+        if (!itemSel) return;
+        const itemName = itemSel.value;
+        const qtyStr = getRowQuantityString(rowId);
+        const unitPrice = priceMap[itemName] || 0;
+        const multiplier = parseOrderQtyMultiplier(qtyStr);
+        const amount = unitPrice * multiplier;
+        total += amount;
+        rows.push({ itemName, qtyStr, amount });
+      });
+      const totalHtml = `<strong style="color:#C0392B; font-size:16px;">${formatWon(total)}</strong>`;
+      const breakdownHtml = rows.length > 1 ? `
+        <div style="display:flex; flex-direction:column; gap:5px; margin-top:8px; padding:10px 12px; background:var(--neutral-tint); border-radius:8px;">
+          ${rows.map((r) => `<div style="display:flex; justify-content:space-between; gap:8px; font-size:13px; color:var(--ink-soft);"><span>${escapeHtml(r.itemName)}${r.qtyStr ? ` · ${escapeHtml(r.qtyStr)}` : ""}</span><span style="flex-shrink:0;">${formatWon(r.amount)}</span></div>`).join("")}
+        </div>
+      ` : "";
+      document.getElementById("estimatedTotal").innerHTML =
+        (rows.length > 1 ? `예상 총 금액: ${totalHtml}` : `예상 금액: ${totalHtml}`) + breakdownHtml;
+    }
+
+    // ---------- 발주 금액 설정 (바이저) ----------
+    async function loadPriceMap() {
+      const { data } = await sb.from("order_item_prices").select("*");
+      priceMap = {};
+      (data || []).forEach((row) => { priceMap[row.item_name] = row.unit_price; });
+    }
+
+    function openPriceModal() {
+      document.getElementById("priceRows").innerHTML = ORDER_CATALOG.map((c) => `
+        <div class="price-row">
+          <span style="font-size:13.5px;">${escapeHtml(c.name)}</span>
+          <input type="text" inputmode="numeric" class="price-input" data-name="${escapeHtml(c.name)}" value="${formatNumber(priceMap[c.name] || 0)}">
+        </div>
+      `).join("");
+      // 입력하는 동안에도 천단위 콤마를 실시간으로 반영합니다.
+      document.querySelectorAll(".price-input").forEach((input) => {
+        input.addEventListener("input", () => {
+          const num = parseNumber(input.value);
+          input.value = num ? formatNumber(num) : "";
+        });
+      });
+      document.getElementById("priceModalBackdrop").classList.remove("hidden");
+    }
+    function closePriceModal() {
+      document.getElementById("priceModalBackdrop").classList.add("hidden");
+    }
+
+    // ---------- 발주 리스트 ----------
+    function renderStatusTabs() {
+      const statuses = ["전체", "요청", "발주완료"];
+      document.getElementById("statusTabs").innerHTML = statuses.map((s) => {
+        const count = s === "전체" ? allOrders.length : allOrders.filter((x) => x.status === s).length;
+        return `<button class="tab-pill ${s === currentStatus ? "active" : ""}" data-status="${s}">${s} ${count}</button>`;
+      }).join("");
+      document.querySelectorAll("#statusTabs .tab-pill").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          currentStatus = btn.dataset.status;
+          renderStatusTabs();
+          renderOrders();
+        });
+      });
+    }
+
+    // 한 발주 건(row)에 담긴 물품 목록을 꺼냅니다. items(배열)로 저장된 새 방식과
+    // item_name/quantity(단일)로 저장된 예전 방식을 모두 같은 형태로 다룰 수 있게 해줍니다.
+    function getOrderItemsList(o) {
+      if (o.items && o.items.length) return o.items;
+      return [{ item_name: o.item_name, quantity: o.quantity }];
+    }
+
+    function startEdit(o) {
+      editingId = o.id;
+      const itemsList = getOrderItemsList(o);
+      formRows = itemsList.map((_, i) => i + 1);
+      nextRowId = itemsList.length + 1;
+      renderFormRows();
+
+      itemsList.forEach((it, i) => {
+        const rowId = i + 1;
+        document.getElementById(`f_item_${rowId}`).value = it.item_name;
+        refreshRowQtyField(rowId);
+
+        const item = catalogItem(it.item_name);
+        if (item.extraQty && it.quantity && it.quantity.includes(" / ")) {
+          const [sizeVal, qtyVal] = it.quantity.split(" / ");
+          document.getElementById(`f_qty_${rowId}`).value = sizeVal;
+          document.getElementById(`f_qty2_${rowId}`).value = qtyVal;
+        } else {
+          document.getElementById(`f_qty_${rowId}`).value = it.quantity || "";
+        }
+      });
+      refreshEstimatedTotal();
+
+      document.getElementById("submitBtn").textContent = "수정 저장";
+      document.getElementById("writeForm").classList.remove("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderOrders() {
+      const filtered = currentStatus === "전체" ? allOrders : allOrders.filter((o) => o.status === currentStatus);
+      const listEl = document.getElementById("orderList");
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="empty-state">발주 요청이 없습니다</div>';
+        return;
+      }
+      listEl.innerHTML = filtered.map((o) => {
+        const storeLabel = o.profiles ? o.profiles.store_name : "";
+        const comments = o.supply_request_comments || [];
+        const commentHtml = comments.map((c) => `
+          <div style="background:var(--neutral-tint); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:6px; margin-top:10px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="pill pill-accent">본사 확인</span>
+              <span style="font-size:12px; color:var(--muted);">${formatDateTime(c.created_at)}</span>
+            </div>
+            <div style="font-size:13.5px; color:var(--ink); line-height:1.55;">${escapeHtml(c.content)}</div>
+          </div>
+        `).join("");
+
+        const canComment = isVisor(profileRef) && o.status === "요청";
+        const commentFormHtml = canComment ? `
+          <div style="margin-top:10px; display:flex; gap:8px;">
+            <input type="text" class="comment-input" data-id="${o.id}" placeholder="발주 확인 내용을 입력하세요 (예: 9/20 입고 예정)" style="flex-grow:1; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
+            <button class="btn-primary comment-submit" data-id="${o.id}" style="padding:9px 16px;">발주완료 처리</button>
+          </div>
+        ` : "";
+
+        const canEdit = isVisor(profileRef) || o.owner_id === profileRef.id;
+        const canDelete = isVisor(profileRef);
+        const actionsHtml = (canEdit || canDelete) ? `
+          <div class="row-actions" style="margin-top:10px;">
+            ${canEdit ? `<button class="btn-edit" data-id="${o.id}" data-action="edit">수정</button>` : ""}
+            ${canDelete ? `<button class="btn-delete" data-id="${o.id}" data-action="delete">삭제</button>` : ""}
+          </div>
+        ` : "";
+
+        // 한 번에 여러 물품을 요청한 경우 items 배열에, 예전 방식(단일 물품)은 item_name/quantity에 들어있습니다.
+        const itemsList = getOrderItemsList(o);
+        const totalAmount = itemsList.reduce((sum, it) => sum + (priceMap[it.item_name] || 0) * parseOrderQtyMultiplier(it.quantity), 0);
+
+        const itemsLineHtml = itemsList.length === 1
+          ? `<span style="font-size:15px; font-weight:700; flex-grow:1;">${escapeHtml(itemsList[0].item_name)}${itemsList[0].quantity ? ` · ${escapeHtml(itemsList[0].quantity)}` : ""}</span>`
+          : `<span style="font-size:15px; font-weight:700; flex-grow:1;">발주 요청 ${itemsList.length}건 묶음</span>`;
+
+        const itemsBreakdownHtml = itemsList.length > 1 ? `
+          <div style="display:flex; flex-direction:column; gap:5px; margin-top:8px; padding:10px 12px; background:var(--neutral-tint); border-radius:8px;">
+            ${itemsList.map((it) => {
+              const up = priceMap[it.item_name] || 0;
+              const mult = parseOrderQtyMultiplier(it.quantity);
+              return `<div style="display:flex; justify-content:space-between; gap:8px; font-size:13px; color:var(--ink-soft);"><span>${escapeHtml(it.item_name)}${it.quantity ? ` · ${escapeHtml(it.quantity)}` : ""}</span><span style="flex-shrink:0;">${formatWon(up * mult)}</span></div>`;
+            }).join("")}
+          </div>
+        ` : "";
+
+        // 송금 완료 처리는 본인 매장(owner) 또는 바이저 모두 가능합니다.
+        const canTogglePay = isVisor(profileRef) || o.owner_id === profileRef.id;
+        const payState = (o.payment_status === "완료") ? "paid" : "unpaid";
+        const payDisabled = canTogglePay ? "" : "disabled";
+        const payToggleHtml = `
+          <div class="pay-toggle">
+            <button class="pay-btn ${payState === "unpaid" ? "active state-unpaid" : ""}" data-id="${o.id}" data-value="미완료" ${payDisabled}>송금 미완료</button>
+            <button class="pay-btn ${payState === "paid" ? "active state-paid" : ""}" data-id="${o.id}" data-value="완료" ${payDisabled}>송금 완료</button>
+          </div>
+        `;
+
+        return `
+          <div class="card suggestion-item">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <span class="pill ${o.status === "발주완료" ? "pill-green" : "pill-amber"}">${o.status}</span>
+              ${payToggleHtml}
+              ${itemsLineHtml}
+              <span style="font-size:12.5px; color:var(--muted);">${escapeHtml(storeLabel)}</span>
+              <span style="font-size:12.5px; color:var(--muted);">${metaDateLabel(o)}</span>
+            </div>
+            <div class="order-total" style="margin-top:8px;">총 금액: ${formatWon(totalAmount)} ${itemsList.length === 1 ? `<span style="font-weight:400; color:var(--muted); font-size:12.5px;">(단가 ${formatWon(priceMap[itemsList[0].item_name] || 0)} × ${parseOrderQtyMultiplier(itemsList[0].quantity)})</span>` : ""}</div>
+            ${itemsBreakdownHtml}
+            ${commentHtml}
+            ${commentFormHtml}
+            ${actionsHtml}
+          </div>
+        `;
+      }).join("");
+
+      listEl.querySelectorAll(".comment-submit").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id;
+          const input = listEl.querySelector(`.comment-input[data-id="${id}"]`);
+          const content = input.value.trim();
+          if (!content) return;
+          btn.disabled = true;
+          const { error: commentError } = await sb.from("supply_request_comments").insert({
+            request_id: id, content, author_id: profileRef.id,
+          });
+          if (!commentError) {
+            await sb.from("supply_requests").update({ status: "발주완료" }).eq("id", id);
+          }
+          btn.disabled = false;
+          loadOrders();
+        });
+      });
+
+      listEl.querySelectorAll(".pay-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (btn.disabled) return;
+          const id = btn.dataset.id;
+          const value = btn.dataset.value;
+          const { error } = await sb.from("supply_requests").update({ payment_status: value }).eq("id", id);
+          if (error) {
+            alert("변경에 실패했습니다: " + error.message);
+            return;
+          }
+          loadOrders();
+        });
+      });
+
+      listEl.querySelectorAll("[data-action='edit']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const o = allOrders.find((x) => x.id === btn.dataset.id);
+          if (o) startEdit(o);
+        });
+      });
+      listEl.querySelectorAll("[data-action='delete']").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("이 발주 요청을 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+          const { error } = await sb.from("supply_requests").delete().eq("id", btn.dataset.id);
+          if (error) {
+            alert("삭제에 실패했습니다: " + error.message);
+            return;
+          }
+          loadOrders();
+        });
+      });
+    }
+
+    async function loadOrders() {
+      const { data, error } = await sb
+        .from("supply_requests")
+        .select("*, profiles(store_name), supply_request_comments(id, content, created_at)")
+        .order("created_at", { ascending: false });
+      if (error) {
+        document.getElementById("orderList").innerHTML = `<div class="empty-state">불러오기 실패: ${escapeHtml(error.message)}</div>`;
+        return;
+      }
+      allOrders = data || [];
+      renderStatusTabs();
+      renderOrders();
+    }
+
+    function resetForm() {
+      editingId = null;
+      formRows = [1];
+      nextRowId = 2;
+      renderFormRows();
+      refreshEstimatedTotal();
+      document.getElementById("submitBtn").textContent = "등록";
+      document.getElementById("writeForm").classList.add("hidden");
+      if (document.activeElement) document.activeElement.blur();
+    }
+
+    (async () => {
+      const auth = await requireAuth();
+      if (!auth) return;
+      profileRef = auth.profile;
+      renderGnb("orders", profileRef);
+      revealPage();
+
+      renderFormRows();
+      await loadPriceMap();
+      refreshEstimatedTotal();
+
+      document.getElementById("addRowBtn").addEventListener("click", () => {
+        if (formRows.length >= MAX_ORDER_ROWS) return;
+        formRows.push(nextRowId++);
+        renderFormRows();
+        refreshEstimatedTotal();
+      });
+
+      if (isVisor(profileRef)) {
+        document.getElementById("priceSettingBtn").classList.remove("hidden");
+      }
+      document.getElementById("priceSettingBtn").addEventListener("click", openPriceModal);
+      document.getElementById("priceModalCloseBtn").addEventListener("click", closePriceModal);
+      document.getElementById("priceModalBackdrop").addEventListener("click", (e) => {
+        if (e.target.id === "priceModalBackdrop") closePriceModal();
+      });
+      document.getElementById("priceSaveBtn").addEventListener("click", async () => {
+        const errEl = document.getElementById("priceModalError");
+        clearFormError(errEl);
+        const rows = Array.from(document.querySelectorAll(".price-input")).map((input) => ({
+          item_name: input.dataset.name,
+          unit_price: parseNumber(input.value),
+        }));
+        const { error } = await sb.from("order_item_prices").upsert(rows, { onConflict: "item_name" });
+        if (error) {
+          showFormError(errEl, "저장에 실패했습니다: " + error.message);
+          return;
+        }
+        await loadPriceMap();
+        refreshEstimatedTotal();
+        renderOrders();
+        closePriceModal();
+      });
+
+      document.getElementById("writeBtn").addEventListener("click", () => {
+        document.getElementById("writeForm").classList.remove("hidden");
+        document.getElementById("writeForm").scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      document.getElementById("cancelBtn").addEventListener("click", () => {
+        resetForm();
+      });
+      document.getElementById("submitBtn").addEventListener("click", async () => {
+        const errEl = document.getElementById("formError");
+        clearFormError(errEl);
+
+        const itemsArr = formRows.map((rowId) => ({
+          item_name: document.getElementById(`f_item_${rowId}`).value,
+          quantity: getRowQuantityString(rowId),
+        }));
+        if (itemsArr.some((it) => !it.item_name || !it.quantity)) {
+          showFormError(errEl, "모든 행의 물품과 수량/단위를 선택해주세요.");
+          return;
+        }
+
+        if (editingId) {
+          // item_name/quantity(예전 단일 저장 방식)는 비워서 items 배열 방식으로 통일합니다.
+          const { error } = await sb.from("supply_requests").update({ items: itemsArr, item_name: null, quantity: null }).eq("id", editingId);
+          if (error) {
+            showFormError(errEl, "저장에 실패했습니다: " + error.message);
+            return;
+          }
+          resetForm();
+          loadOrders();
+          return;
+        }
+
+        // 여러 물품을 한 번에 요청해도 발주 목록에는 하나의 요청 건으로 묶여서 표시됩니다.
+        const { error } = await sb.from("supply_requests").insert({
+          items: itemsArr,
+          owner_id: profileRef.id,
+          status: "요청",
+          payment_status: "미완료",
+        });
+        if (error) {
+          showFormError(errEl, "저장에 실패했습니다: " + error.message);
+          return;
+        }
+        resetForm();
+        loadOrders();
+      });
+
+      loadOrders();
+    })();
+  </script>
+</body>
+</html>

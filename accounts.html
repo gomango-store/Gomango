@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>계정관리 - GOMANGO 점주 운영 게시판</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <div id="gnb"></div>
+
+  <main class="page-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">계정관리</h1>
+        <p class="page-subtitle">매장 계정을 추가하거나 수정·삭제할 수 있습니다 (바이저 전용)</p>
+      </div>
+      <button id="writeBtn" class="btn-primary">+ 계정 추가</button>
+    </div>
+
+    <div id="writeForm" class="form-card hidden">
+      <div class="form-row">
+        <div class="form-field" style="flex:2;">
+          <label>아이디</label>
+          <input id="f_email" type="text" placeholder="store01" autocomplete="off">
+        </div>
+        <div class="form-field">
+          <label>권한</label>
+          <select id="f_role">
+            <option value="owner">점주</option>
+            <option value="visor">바이저</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field" style="flex:2;">
+          <label>매장명</label>
+          <input id="f_store_name" type="text" placeholder="예: 강남점">
+        </div>
+        <div class="form-field">
+          <label id="passwordLabel">비밀번호</label>
+          <input id="f_password" type="text" placeholder="6자 이상">
+        </div>
+      </div>
+      <p id="passwordHint" style="font-size:12.5px; color:var(--muted); margin:0;">비밀번호는 6자 이상으로 입력해주세요.</p>
+      <div id="formError" class="error-text hidden"></div>
+      <div style="display:flex; gap:10px;">
+        <button id="submitBtn" class="btn-primary">등록</button>
+        <button id="cancelBtn" class="btn-link">취소</button>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end;">
+      <input id="searchInput" type="text" placeholder="🔍 아이디 또는 매장명 검색" style="width:260px; max-width:100%; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
+    </div>
+
+    <div id="accountList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
+
+    <div class="card" style="margin-top:8px;">
+      <div style="font-size:15px; font-weight:700; color:var(--ink);">🗄 오래된 게시글 정리</div>
+      <p style="font-size:12.5px; color:var(--muted); margin:6px 0 12px; line-height:1.6;">
+        작성한 지 3개월이 지난 건의함·본사 발주 게시글(답변/댓글 포함)을 JSON 백업 파일로 내 컴퓨터에 다운로드한 뒤, DB에서 삭제해 저장공간을 확보합니다.
+        삭제 전에 대상 건수를 먼저 보여드리고, 한 번 더 확인을 거친 뒤에만 진행됩니다.
+      </p>
+      <button id="cleanupBtn" class="btn-outline">3개월 지난 게시글 정리하기</button>
+      <div id="cleanupStatus" class="hidden" style="font-size:13px; color:var(--muted); margin-top:10px;"></div>
+    </div>
+  </main>
+
+  <script src="assets/supabaseClient.js?v=20260918a"></script>
+  <script src="assets/app.js?v=20260918a"></script>
+  <script>
+    let profileRef = null;
+    let sessionRef = null;
+    let editingId = null;
+    let allAccounts = [];
+    let searchQuery = "";
+
+    const ROLE_LABEL = { owner: "점주", visor: "바이저" };
+
+    // 계정 생성/수정/삭제/목록 조회는 관리자 권한이 필요해서 Edge Function(admin-users)을 통해 처리합니다.
+    async function callAdmin(action, payload) {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/admin-users`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionRef.access_token}`,
+          "apikey": SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || "요청에 실패했습니다.");
+      return data;
+    }
+
+    function resetForm() {
+      editingId = null;
+      document.getElementById("f_email").value = "";
+      document.getElementById("f_email").disabled = false;
+      document.getElementById("f_store_name").value = "";
+      document.getElementById("f_role").value = "owner";
+      document.getElementById("f_password").value = "";
+      document.getElementById("passwordLabel").textContent = "비밀번호";
+      document.getElementById("passwordHint").textContent = "비밀번호는 6자 이상으로 입력해주세요.";
+      document.getElementById("submitBtn").textContent = "등록";
+      document.getElementById("submitBtn").disabled = false;
+      document.getElementById("writeForm").classList.add("hidden");
+      if (document.activeElement) document.activeElement.blur();
+    }
+
+    function startEdit(a) {
+      editingId = a.id;
+      document.getElementById("f_email").value = emailToId(a.email || "");
+      document.getElementById("f_email").disabled = true;
+      document.getElementById("f_store_name").value = a.store_name || "";
+      document.getElementById("f_role").value = a.role;
+      document.getElementById("f_password").value = "";
+      document.getElementById("passwordLabel").textContent = "새 비밀번호 (선택)";
+      document.getElementById("passwordHint").textContent = "비밀번호를 바꾸지 않으려면 비워두세요.";
+      document.getElementById("submitBtn").textContent = "수정 저장";
+      document.getElementById("writeForm").classList.remove("hidden");
+      document.getElementById("writeForm").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    // 아이디/매장명 기준으로 검색어와 일치하는 계정만 보여줍니다.
+    function getFilteredAccounts() {
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return allAccounts;
+      return allAccounts.filter((a) => {
+        const idText = emailToId(a.email || "").toLowerCase();
+        const storeText = (a.store_name || "").toLowerCase();
+        return idText.includes(q) || storeText.includes(q);
+      });
+    }
+
+    function renderAccounts() {
+      const listEl = document.getElementById("accountList");
+      if (!allAccounts.length) {
+        listEl.innerHTML = '<div class="empty-state">등록된 계정이 없습니다</div>';
+        return;
+      }
+      const filtered = getFilteredAccounts();
+      if (!filtered.length) {
+        listEl.innerHTML = '<div class="empty-state">검색 결과가 없습니다</div>';
+        return;
+      }
+      listEl.innerHTML = filtered.map((a) => `
+        <div class="card resource-item" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:14px; flex-grow:1; min-width:0; flex-wrap:wrap;">
+            <span class="pill ${a.role === "visor" ? "pill-accent" : "pill-neutral"}">${ROLE_LABEL[a.role] || a.role}</span>
+            <span style="font-size:15px; font-weight:600;">${escapeHtml(a.store_name)}</span>
+            <span style="font-size:13px; color:var(--muted);">${escapeHtml(emailToId(a.email || ""))}</span>
+            ${a.id === (profileRef && profileRef.id) ? '<span class="pill pill-neutral" style="font-size:11px;">나</span>' : ""}
+          </div>
+          <div class="row-actions">
+            <button class="btn-edit" data-id="${a.id}" data-action="edit">수정</button>
+            <button class="btn-delete" data-id="${a.id}" data-action="delete" ${a.id === (profileRef && profileRef.id) ? "disabled" : ""}>삭제</button>
+          </div>
+        </div>
+      `).join("");
+
+      listEl.querySelectorAll("[data-action='edit']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const a = allAccounts.find((x) => x.id === btn.dataset.id);
+          if (a) startEdit(a);
+        });
+      });
+      listEl.querySelectorAll("[data-action='delete']").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (btn.disabled) return;
+          if (!confirm("이 계정을 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+          btn.disabled = true;
+          try {
+            await callAdmin("delete", { id: btn.dataset.id });
+            loadAccounts();
+          } catch (e) {
+            alert("삭제에 실패했습니다: " + e.message);
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    async function loadAccounts() {
+      const listEl = document.getElementById("accountList");
+      try {
+        const data = await callAdmin("list", {});
+        allAccounts = data.accounts || [];
+        renderAccounts();
+      } catch (e) {
+        listEl.innerHTML = `<div class="empty-state">불러오기 실패: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    // ---------- 오래된 게시글(건의함/본사 발주) 백업 후 삭제 ----------
+    // 브라우저에서 sb 클라이언트로 직접 조회/삭제합니다 (바이저는 두 테이블 모두 전체 조회·삭제 권한이 RLS로 이미 허용되어 있어서
+    // 계정관리와 달리 관리자 권한(Edge Function)이 필요 없습니다). 답변/댓글은 DB에 ON DELETE CASCADE로 걸려있어 게시글을
+    // 지우면 함께 지워지므로, 백업 시점에 미리 함께 담아둡니다.
+    function downloadJson(filename, data) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function runCleanup() {
+      const btn = document.getElementById("cleanupBtn");
+      const statusEl = document.getElementById("cleanupStatus");
+      statusEl.classList.remove("hidden");
+      btn.disabled = true;
+      statusEl.textContent = "3개월 이상 지난 게시글을 확인하는 중...";
+
+      try {
+        const cutoff = new Date();
+        cutoff.setMonth(cutoff.getMonth() - 3);
+        const cutoffIso = cutoff.toISOString();
+
+        const [{ data: oldSuggestions, error: sErr }, { data: oldOrders, error: oErr }] = await Promise.all([
+          sb.from("suggestions").select("*, profiles(store_name), suggestion_replies(*)").lt("created_at", cutoffIso),
+          sb.from("supply_requests").select("*, profiles(store_name), supply_request_comments(*)").lt("created_at", cutoffIso),
+        ]);
+        if (sErr || oErr) throw new Error((sErr && sErr.message) || (oErr && oErr.message));
+
+        const suggestionCount = (oldSuggestions || []).length;
+        const orderCount = (oldOrders || []).length;
+        const total = suggestionCount + orderCount;
+
+        if (total === 0) {
+          statusEl.textContent = "3개월 이상 지난 건의함/본사 발주 게시글이 없습니다.";
+          btn.disabled = false;
+          return;
+        }
+
+        const confirmed = confirm(
+          `건의함 ${suggestionCount}건, 본사 발주 ${orderCount}건 (총 ${total}건)이 작성한 지 3개월을 넘었습니다.\n` +
+          `백업 파일을 다운로드한 뒤 DB에서 삭제합니다. 계속할까요?`
+        );
+        if (!confirmed) {
+          statusEl.textContent = "";
+          statusEl.classList.add("hidden");
+          btn.disabled = false;
+          return;
+        }
+
+        const stamp = new Date().toISOString().slice(0, 10);
+        downloadJson(`juicy-board-backup-${stamp}.json`, {
+          generated_at: new Date().toISOString(),
+          cutoff_date: cutoffIso,
+          suggestions: oldSuggestions,
+          supply_requests: oldOrders,
+        });
+
+        statusEl.textContent = "백업 파일을 다운로드했습니다. 삭제하는 중...";
+
+        const suggestionIds = (oldSuggestions || []).map((s) => s.id);
+        const orderIds = (oldOrders || []).map((o) => o.id);
+
+        const [delSug, delOrd] = await Promise.all([
+          suggestionIds.length ? sb.from("suggestions").delete().in("id", suggestionIds) : Promise.resolve({ error: null }),
+          orderIds.length ? sb.from("supply_requests").delete().in("id", orderIds) : Promise.resolve({ error: null }),
+        ]);
+        if (delSug.error || delOrd.error) {
+          throw new Error((delSug.error && delSug.error.message) || (delOrd.error && delOrd.error.message));
+        }
+
+        statusEl.textContent = `완료: 건의함 ${suggestionCount}건, 본사 발주 ${orderCount}건을 백업하고 삭제했습니다.`;
+      } catch (e) {
+        statusEl.textContent = "정리에 실패했습니다: " + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    (async () => {
+      const auth = await requireAuth();
+      if (!auth) return;
+      profileRef = auth.profile;
+      sessionRef = auth.session;
+
+      if (!isVisor(profileRef)) {
+        location.replace("index");
+        return;
+      }
+
+      renderGnb("accounts", profileRef);
+      revealPage();
+
+      document.getElementById("writeBtn").addEventListener("click", () => {
+        resetForm();
+        document.getElementById("writeForm").classList.remove("hidden");
+        document.getElementById("writeForm").scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      document.getElementById("cancelBtn").addEventListener("click", () => {
+        resetForm();
+      });
+      document.getElementById("searchInput").addEventListener("input", (e) => {
+        searchQuery = e.target.value;
+        renderAccounts();
+      });
+      document.getElementById("cleanupBtn").addEventListener("click", runCleanup);
+
+      document.getElementById("submitBtn").addEventListener("click", async () => {
+        const errEl = document.getElementById("formError");
+        clearFormError(errEl);
+        const loginId = document.getElementById("f_email").value.trim();
+        const store_name = document.getElementById("f_store_name").value.trim();
+        const role = document.getElementById("f_role").value;
+        const password = document.getElementById("f_password").value;
+
+        if (!loginId || !store_name) {
+          showFormError(errEl, "아이디와 매장명을 모두 입력해주세요.");
+          return;
+        }
+        if (!editingId && !isValidLoginId(loginId)) {
+          showFormError(errEl, "아이디는 영문/숫자/.(마침표)/_(밑줄)/-(하이픈)만 사용해 2~40자로 입력해주세요.");
+          return;
+        }
+        if (!editingId && (!password || password.length < 6)) {
+          showFormError(errEl, "비밀번호는 6자 이상으로 입력해주세요.");
+          return;
+        }
+        if (editingId && password && password.length < 6) {
+          showFormError(errEl, "비밀번호는 6자 이상으로 입력해주세요.");
+          return;
+        }
+
+        document.getElementById("submitBtn").disabled = true;
+        try {
+          if (editingId) {
+            await callAdmin("update", { id: editingId, store_name, role, password: password || undefined });
+          } else {
+            await callAdmin("create", { email: idToEmail(loginId), password, store_name, role });
+          }
+          resetForm();
+          loadAccounts();
+        } catch (e) {
+          showFormError(errEl, "저장에 실패했습니다: " + e.message);
+          document.getElementById("submitBtn").disabled = false;
+        }
+      });
+
+      loadAccounts();
+    })();
+  </script>
+</body>
+</html>

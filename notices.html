@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>공지사항 - GOMANGO 점주 운영 게시판</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <div id="gnb"></div>
+
+  <main class="page-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">공지사항</h1>
+        <p class="page-subtitle">회사 소식, 정책 변경, 프로모션 안내를 확인하세요</p>
+      </div>
+      <button id="writeBtn" class="btn-primary hidden">+ 공지 작성</button>
+    </div>
+
+    <div id="writeForm" class="form-card hidden">
+      <div class="form-row">
+        <div class="form-field" style="flex:2;">
+          <label>제목</label>
+          <input id="f_title" type="text" placeholder="공지 제목을 입력하세요">
+        </div>
+        <div class="form-field">
+          <label>분류</label>
+          <select id="f_category">
+            <option value="일반">일반</option>
+            <option value="정책">정책</option>
+            <option value="프로모션">프로모션</option>
+            <option value="휴무/일정">휴무/일정</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field">
+        <label>내용</label>
+        <textarea id="f_content" placeholder="공지 내용을 입력하세요"></textarea>
+      </div>
+      <div class="form-field">
+        <label>이미지 링크 (구글 드라이브, 선택)</label>
+        <input id="f_image_url" type="url" placeholder="https://drive.google.com/file/d/...">
+        <p style="font-size:12px; color:var(--muted); margin:4px 0 0;">구글 드라이브 공유 설정을 "링크가 있는 모든 사용자"로 해두셔야 썸네일이 보입니다.</p>
+      </div>
+      <label class="checkbox-row"><input type="checkbox" id="f_pinned"> 필독 공지로 상단에 고정</label>
+      <div id="formError" class="error-text hidden"></div>
+      <div style="display:flex; gap:10px;">
+        <button id="submitBtn" class="btn-primary">등록</button>
+        <button id="cancelBtn" class="btn-link">취소</button>
+      </div>
+    </div>
+
+    <div id="noticeList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
+  </main>
+
+  <script src="assets/supabaseClient.js?v=20260918a"></script>
+  <script src="assets/app.js?v=20260918a"></script>
+  <script>
+    let profileRef = null;
+    let editingId = null;
+    let allNotices = [];
+
+    function resetForm() {
+      editingId = null;
+      document.getElementById("f_title").value = "";
+      document.getElementById("f_content").value = "";
+      document.getElementById("f_image_url").value = "";
+      document.getElementById("f_category").value = "일반";
+      document.getElementById("f_pinned").checked = false;
+      document.getElementById("submitBtn").textContent = "등록";
+      document.getElementById("writeForm").classList.add("hidden");
+      if (isVisor(profileRef)) document.getElementById("writeBtn").classList.remove("hidden");
+      if (document.activeElement) document.activeElement.blur();
+    }
+
+    function startEdit(n) {
+      editingId = n.id;
+      document.getElementById("f_title").value = n.title;
+      document.getElementById("f_content").value = n.content;
+      document.getElementById("f_image_url").value = n.image_url || "";
+      document.getElementById("f_category").value = n.category;
+      document.getElementById("f_pinned").checked = !!n.is_pinned;
+      document.getElementById("submitBtn").textContent = "수정 저장";
+      document.getElementById("writeForm").classList.remove("hidden");
+      document.getElementById("writeBtn").classList.add("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderNotices() {
+      const listEl = document.getElementById("noticeList");
+      if (!allNotices.length) {
+        listEl.innerHTML = '<div class="empty-state">등록된 공지사항이 없습니다</div>';
+        return;
+      }
+      listEl.innerHTML = allNotices.map((n) => `
+        <div class="card notice-item">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            ${n.is_pinned ? '<span class="pill pill-amber-solid">필독</span>' : isWithinDays(n.created_at, 7) ? '<span class="pill pill-secondary">NEW</span>' : ""}
+            <span style="font-size:16px; font-weight:700; flex-grow:1;">${escapeHtml(n.title)}</span>
+            <span style="font-size:13px; color:var(--muted);">${escapeHtml(n.category)} · ${metaDateLabel(n)}</span>
+          </div>
+          <div style="margin-top:10px; font-size:14px; color:var(--ink-soft); line-height:1.6; white-space:pre-line;">${escapeHtml(n.content)}</div>
+          ${n.image_url ? `
+            <div style="margin-top:10px;">
+              <a href="${escapeHtml(getGoogleDriveViewUrl(n.image_url))}" target="_blank" rel="noopener" style="display:inline-block;">
+                ${getGoogleDriveThumbUrl(n.image_url)
+                  ? `<img src="${escapeHtml(getGoogleDriveThumbUrl(n.image_url))}" alt="첨부 이미지" loading="lazy" style="max-width:280px; max-height:200px; border-radius:10px; border:1px solid var(--border); display:block;">`
+                  : `<span style="font-size:13px; color:var(--accent-dark);">🖼 첨부 이미지 보기 ›</span>`}
+              </a>
+            </div>
+          ` : ""}
+          ${isVisor(profileRef) ? `
+            <div class="row-actions" style="margin-top:12px;">
+              <button class="btn-edit" data-id="${n.id}" data-action="edit">수정</button>
+              <button class="btn-delete" data-id="${n.id}" data-action="delete">삭제</button>
+            </div>
+          ` : ""}
+        </div>
+      `).join("");
+
+      listEl.querySelectorAll("[data-action='edit']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const n = allNotices.find((x) => x.id === btn.dataset.id);
+          if (n) startEdit(n);
+        });
+      });
+      listEl.querySelectorAll("[data-action='delete']").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("이 공지사항을 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+          const { error } = await sb.from("notices").delete().eq("id", btn.dataset.id);
+          if (error) {
+            alert("삭제에 실패했습니다: " + error.message);
+            return;
+          }
+          loadNotices();
+        });
+      });
+    }
+
+    async function loadNotices() {
+      const { data, error } = await sb.from("notices").select("*").order("is_pinned", { ascending: false }).order("created_at", { ascending: false });
+      const listEl = document.getElementById("noticeList");
+      if (error) {
+        listEl.innerHTML = `<div class="empty-state">공지사항을 불러오지 못했습니다: ${escapeHtml(error.message)}</div>`;
+        return;
+      }
+      allNotices = data || [];
+      renderNotices();
+    }
+
+    (async () => {
+      const auth = await requireAuth();
+      if (!auth) return;
+      profileRef = auth.profile;
+      renderGnb("notices", profileRef);
+      revealPage();
+
+      if (isVisor(profileRef)) {
+        document.getElementById("writeBtn").classList.remove("hidden");
+      }
+
+      document.getElementById("writeBtn").addEventListener("click", () => {
+        document.getElementById("writeForm").classList.remove("hidden");
+        document.getElementById("writeBtn").classList.add("hidden");
+        document.getElementById("writeForm").scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      document.getElementById("cancelBtn").addEventListener("click", () => {
+        resetForm();
+      });
+
+      document.getElementById("submitBtn").addEventListener("click", async () => {
+        const errEl = document.getElementById("formError");
+        clearFormError(errEl);
+        const title = document.getElementById("f_title").value.trim();
+        const content = document.getElementById("f_content").value.trim();
+        const imageUrl = document.getElementById("f_image_url").value.trim();
+        const category = document.getElementById("f_category").value;
+        const isPinned = document.getElementById("f_pinned").checked;
+
+        if (!title || !content) {
+          showFormError(errEl, "제목과 내용을 모두 입력해주세요.");
+          return;
+        }
+
+        const payload = { title, content, category, is_pinned: isPinned, image_url: imageUrl || null };
+        const { error } = editingId
+          ? await sb.from("notices").update(payload).eq("id", editingId)
+          : await sb.from("notices").insert({ ...payload, author_id: profileRef.id });
+
+        if (error) {
+          showFormError(errEl, "저장에 실패했습니다: " + error.message);
+          return;
+        }
+
+        resetForm();
+        loadNotices();
+      });
+
+      loadNotices();
+    })();
+  </script>
+</body>
+</html>

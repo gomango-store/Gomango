@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>자료실 - GOMANGO 점주 운영 게시판</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <div id="gnb"></div>
+
+  <main class="page-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">자료실</h1>
+        <p class="page-subtitle">레시피 파일, 디자인 자료, 배달 등록 누끼 등 파일을 받아볼 수 있습니다.</p>
+      </div>
+      <button id="writeBtn" class="btn-primary hidden">+ 자료 등록</button>
+    </div>
+
+    <div id="writeForm" class="form-card hidden">
+      <div class="form-row">
+        <div class="form-field" style="flex:2;">
+          <label>자료 제목</label>
+          <input id="f_title" type="text" placeholder="예: 위생 점검 체크리스트">
+        </div>
+        <div class="form-field">
+          <label>분류</label>
+          <select id="f_category">
+            <option value="매뉴얼">매뉴얼</option>
+            <option value="서식">서식</option>
+            <option value="포스터">포스터</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field">
+        <label>파일 링크 (구글 드라이브, Supabase Storage 등)</label>
+        <input id="f_url" type="url" placeholder="https://...">
+      </div>
+      <div id="formError" class="error-text hidden"></div>
+      <div style="display:flex; gap:10px;">
+        <button id="submitBtn" class="btn-primary">등록</button>
+        <button id="cancelBtn" class="btn-link">취소</button>
+      </div>
+    </div>
+
+    <div id="resourceList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
+  </main>
+
+  <script src="assets/supabaseClient.js?v=20260918a"></script>
+  <script src="assets/app.js?v=20260918a"></script>
+  <script>
+    let profileRef = null;
+    let editingId = null;
+    let allResources = [];
+
+    function resetForm() {
+      editingId = null;
+      document.getElementById("f_title").value = "";
+      document.getElementById("f_url").value = "";
+      document.getElementById("f_category").value = "매뉴얼";
+      document.getElementById("submitBtn").textContent = "등록";
+      document.getElementById("writeForm").classList.add("hidden");
+      if (isVisor(profileRef)) document.getElementById("writeBtn").classList.remove("hidden");
+      if (document.activeElement) document.activeElement.blur();
+    }
+
+    function startEdit(r) {
+      editingId = r.id;
+      document.getElementById("f_title").value = r.title;
+      document.getElementById("f_category").value = r.category;
+      document.getElementById("f_url").value = r.url;
+      document.getElementById("submitBtn").textContent = "수정 저장";
+      document.getElementById("writeForm").classList.remove("hidden");
+      document.getElementById("writeBtn").classList.add("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderResources() {
+      const listEl = document.getElementById("resourceList");
+      if (!allResources.length) {
+        listEl.innerHTML = '<div class="empty-state">등록된 자료가 없습니다</div>';
+        return;
+      }
+      listEl.innerHTML = allResources.map((r) => `
+        <div class="card resource-item" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+          <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" style="display:flex; align-items:center; gap:14px; flex-grow:1; min-width:0;">
+            <span class="pill ${categoryPillClass(r.category)}">${escapeHtml(r.category)}</span>
+            <span style="font-size:15px; font-weight:600; flex-grow:1;">${escapeHtml(r.title)}</span>
+            <span style="font-size:13px; color:var(--muted); white-space:nowrap;">${metaDateLabel(r)}</span>
+            <span style="font-size:13px; color:var(--accent-dark); white-space:nowrap;">열기 ›</span>
+          </a>
+          ${isVisor(profileRef) ? `
+            <div class="row-actions">
+              <button class="btn-edit" data-id="${r.id}" data-action="edit">수정</button>
+              <button class="btn-delete" data-id="${r.id}" data-action="delete">삭제</button>
+            </div>
+          ` : ""}
+        </div>
+      `).join("");
+
+      listEl.querySelectorAll("[data-action='edit']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const r = allResources.find((x) => x.id === btn.dataset.id);
+          if (r) startEdit(r);
+        });
+      });
+      listEl.querySelectorAll("[data-action='delete']").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("이 자료를 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+          const { error } = await sb.from("resources").delete().eq("id", btn.dataset.id);
+          if (error) {
+            alert("삭제에 실패했습니다: " + error.message);
+            return;
+          }
+          loadResources();
+        });
+      });
+    }
+
+    async function loadResources() {
+      const { data, error } = await sb.from("resources").select("*").order("created_at", { ascending: false });
+      const listEl = document.getElementById("resourceList");
+      if (error) {
+        listEl.innerHTML = `<div class="empty-state">불러오기 실패: ${escapeHtml(error.message)}</div>`;
+        return;
+      }
+      allResources = data || [];
+      renderResources();
+    }
+
+    (async () => {
+      const auth = await requireAuth();
+      if (!auth) return;
+      profileRef = auth.profile;
+      renderGnb("resources", profileRef);
+      revealPage();
+
+      if (isVisor(profileRef)) {
+        document.getElementById("writeBtn").classList.remove("hidden");
+      }
+
+      document.getElementById("writeBtn").addEventListener("click", () => {
+        document.getElementById("writeForm").classList.remove("hidden");
+        document.getElementById("writeBtn").classList.add("hidden");
+        document.getElementById("writeForm").scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      document.getElementById("cancelBtn").addEventListener("click", () => {
+        resetForm();
+      });
+
+      document.getElementById("submitBtn").addEventListener("click", async () => {
+        const errEl = document.getElementById("formError");
+        clearFormError(errEl);
+        const title = document.getElementById("f_title").value.trim();
+        const category = document.getElementById("f_category").value;
+        const url = document.getElementById("f_url").value.trim();
+        if (!title || !url) {
+          showFormError(errEl, "제목과 링크를 모두 입력해주세요.");
+          return;
+        }
+        const payload = { title, category, url };
+        const { error } = editingId
+          ? await sb.from("resources").update(payload).eq("id", editingId)
+          : await sb.from("resources").insert({ ...payload, author_id: profileRef.id });
+        if (error) {
+          showFormError(errEl, "저장에 실패했습니다: " + error.message);
+          return;
+        }
+        resetForm();
+        loadResources();
+      });
+
+      loadResources();
+    })();
+  </script>
+</body>
+</html>

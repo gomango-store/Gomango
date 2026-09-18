@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>레시피 - GOMANGO 점주 운영 게시판</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <div id="gnb"></div>
+
+  <main class="page-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">레시피</h1>
+        <p class="page-subtitle">제조 영상과 레시피 카드를 확인하세요</p>
+      </div>
+      <button id="writeBtn" class="btn-primary hidden">+ 새 레시피 등록</button>
+    </div>
+
+    <div id="writeForm" class="form-card hidden">
+      <div class="form-row">
+        <div class="form-field" style="flex:2;">
+          <label>메뉴 이름</label>
+          <input id="f_title" type="text" placeholder="예: 블러드오렌지 에이드">
+        </div>
+        <div class="form-field">
+          <label>분류</label>
+          <select id="f_category">
+            <option value="신메뉴">신메뉴</option>
+            <option value="시즌 메뉴">시즌 메뉴</option>
+            <option value="베이직 메뉴">베이직 메뉴</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field">
+        <label>제조 영상 링크 (유튜브 등)</label>
+        <input id="f_video" type="url" placeholder="https://youtu.be/...">
+      </div>
+      <div class="form-field">
+        <label>재료 (쉼표로 구분)</label>
+        <input id="f_ingredients" type="text" placeholder="블러드오렌지 시럽 30ml, 탄산수 150ml, 각얼음">
+      </div>
+      <div class="form-field">
+        <label>제조 순서 (줄바꿈으로 구분)</label>
+        <textarea id="f_steps" placeholder="컵에 각얼음을 8부까지 채운다&#10;시럽 30ml를 넣는다&#10;탄산수를 붓는다"></textarea>
+      </div>
+      <div class="form-field">
+        <label>레시피 카드 PDF 링크 (선택)</label>
+        <input id="f_pdf" type="url" placeholder="https://...">
+      </div>
+      <div id="formError" class="error-text hidden"></div>
+      <div style="display:flex; gap:10px;">
+        <button id="submitBtn" class="btn-primary">등록</button>
+        <button id="cancelBtn" class="btn-link">취소</button>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;" id="filterTabs"></div>
+
+    <div class="recipe-grid" id="recipeGrid"><div class="empty-state">불러오는 중...</div></div>
+  </main>
+
+  <script src="assets/supabaseClient.js?v=20260918a"></script>
+  <script src="assets/app.js?v=20260918a"></script>
+  <script>
+    let allRecipes = [];
+    let currentFilter = "전체";
+    let selectedId = null;
+    let profileRef = null;
+    let editingId = null;
+
+    function renderFilterTabs() {
+      const cats = ["전체", "신메뉴", "시즌 메뉴", "베이직 메뉴"];
+      document.getElementById("filterTabs").innerHTML = cats.map((c) => {
+        const count = c === "전체" ? allRecipes.length : allRecipes.filter((r) => r.category === c).length;
+        return `<button class="tab-pill ${c === currentFilter ? "active" : ""}" data-cat="${c}">${c} ${count}</button>`;
+      }).join("");
+      document.querySelectorAll(".tab-pill").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          currentFilter = btn.dataset.cat;
+          renderFilterTabs();
+          renderGrid();
+        });
+      });
+    }
+
+    // 카드를 선택하면 이 카드 바로 아래에 전체 폭으로 상세 내용이 펼쳐집니다.
+    function buildDetailHtml(r) {
+      const ingredients = r.ingredients || [];
+      const steps = r.steps || [];
+      return `
+        <div class="card recipe-detail-row" data-detail-for="${r.id}">
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              ${isWithinDays(r.created_at, 14) ? '<span class="pill pill-accent-solid">NEW</span>' : ""}
+              <span style="font-size:18px; font-weight:700; flex-grow:1;">${escapeHtml(r.title)}</span>
+              <button class="btn-link" id="detailCloseBtn">닫기 ✕</button>
+            </div>
+            <div style="font-size:12.5px; color:var(--muted); margin-top:-10px;">${metaDateLabel(r)} 등록</div>
+            ${r.video_url ? `<a href="${escapeHtml(r.video_url)}" target="_blank" rel="noopener" class="btn-outline">제조 영상 링크 바로가기</a>` : '<div class="empty-state" style="padding:12px 0;">등록된 영상 링크가 없습니다</div>'}
+            ${ingredients.length ? `
+              <div>
+                <div style="font-size:13.5px; font-weight:700; margin-bottom:8px;">재료</div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">${ingredients.map((i) => `<span class="ingredient-pill">${escapeHtml(i)}</span>`).join("")}</div>
+              </div>` : ""}
+            ${steps.length ? `
+              <div>
+                <div style="font-size:13.5px; font-weight:700; margin-bottom:8px;">제조 순서</div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  ${steps.map((s, i) => `<div class="step-row"><span class="step-num">${i + 1}.</span><span>${escapeHtml(s)}</span></div>`).join("")}
+                </div>
+              </div>` : ""}
+            ${r.pdf_url ? `<a href="${escapeHtml(r.pdf_url)}" target="_blank" rel="noopener" class="btn-primary" style="justify-content:center;">레시피 카드 PDF 다운로드</a>` : ""}
+            ${isVisor(profileRef) ? `
+              <div class="row-actions" style="justify-content:flex-end;">
+                <button class="btn-edit" id="detailEditBtn">수정</button>
+                <button class="btn-delete" id="detailDeleteBtn">삭제</button>
+              </div>
+            ` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderGrid() {
+      const filtered = currentFilter === "전체" ? allRecipes : allRecipes.filter((r) => r.category === currentFilter);
+      const gridEl = document.getElementById("recipeGrid");
+      if (filtered.length === 0) {
+        gridEl.innerHTML = '<div class="empty-state">등록된 레시피가 없습니다</div>';
+        return;
+      }
+      gridEl.innerHTML = filtered.map((r) => {
+        const thumbUrl = getYoutubeThumbUrl(r.video_url);
+        const isNew = isWithinDays(r.created_at, 14);
+        const cardHtml = `
+        <div class="recipe-card ${r.id === selectedId ? "selected" : ""}" data-id="${r.id}">
+          <div class="recipe-thumb">
+            ${thumbUrl ? `<img class="recipe-thumb-img" src="${escapeHtml(thumbUrl)}" alt="" loading="lazy">` : ""}
+            ${isNew ? '<span class="pill pill-accent-solid" style="position:absolute; top:10px; left:10px; z-index:2;">NEW</span>' : ""}
+            <span class="recipe-thumb-play ${thumbUrl ? "" : "no-video"}">▶</span>
+          </div>
+          <div class="recipe-card-body">
+            <div style="font-size:15px; font-weight:700;">${escapeHtml(r.title)}</div>
+            <div style="font-size:12.5px; color:var(--muted);">${escapeHtml(r.category)} · ${metaDateLabel(r)}</div>
+            ${isVisor(profileRef) ? `
+              <div class="row-actions" data-card-actions="1" style="margin-top:6px;">
+                <button class="btn-edit" data-id="${r.id}" data-action="edit">수정</button>
+                <button class="btn-delete" data-id="${r.id}" data-action="delete">삭제</button>
+              </div>
+            ` : ""}
+          </div>
+        </div>
+      `;
+        return cardHtml + (r.id === selectedId ? buildDetailHtml(r) : "");
+      }).join("");
+
+      document.querySelectorAll(".recipe-card").forEach((card) => {
+        card.addEventListener("click", (e) => {
+          if (e.target.closest("[data-card-actions]")) return;
+          const id = card.dataset.id;
+          selectedId = selectedId === id ? null : id; // 같은 카드를 다시 누르면 상세 내용을 닫습니다.
+          renderGrid();
+          if (selectedId) {
+            const detailEl = document.querySelector(`[data-detail-for="${selectedId}"]`);
+            if (detailEl) detailEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        });
+      });
+      gridEl.querySelectorAll("[data-action='edit']").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const r = allRecipes.find((x) => x.id === btn.dataset.id);
+          if (r) startEdit(r);
+        });
+      });
+      gridEl.querySelectorAll("[data-action='delete']").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (!confirm("이 레시피를 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+          const { error } = await sb.from("recipes").delete().eq("id", btn.dataset.id);
+          if (error) {
+            alert("삭제에 실패했습니다: " + error.message);
+            return;
+          }
+          if (selectedId === btn.dataset.id) selectedId = null;
+          loadRecipes();
+        });
+      });
+
+      const closeBtn = document.getElementById("detailCloseBtn");
+      if (closeBtn) closeBtn.addEventListener("click", () => { selectedId = null; renderGrid(); });
+      const detailEditBtn = document.getElementById("detailEditBtn");
+      if (detailEditBtn) detailEditBtn.addEventListener("click", () => {
+        const r = allRecipes.find((x) => x.id === selectedId);
+        if (r) startEdit(r);
+      });
+      const detailDeleteBtn = document.getElementById("detailDeleteBtn");
+      if (detailDeleteBtn) detailDeleteBtn.addEventListener("click", async () => {
+        if (!confirm("이 레시피를 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+        const { error } = await sb.from("recipes").delete().eq("id", selectedId);
+        if (error) {
+          alert("삭제에 실패했습니다: " + error.message);
+          return;
+        }
+        selectedId = null;
+        loadRecipes();
+      });
+    }
+
+    function resetForm() {
+      editingId = null;
+      ["f_title", "f_video", "f_pdf", "f_ingredients", "f_steps"].forEach((id) => (document.getElementById(id).value = ""));
+      document.getElementById("f_category").value = "신메뉴";
+      document.getElementById("submitBtn").textContent = "등록";
+      document.getElementById("writeForm").classList.add("hidden");
+      if (isVisor(profileRef)) document.getElementById("writeBtn").classList.remove("hidden");
+      if (document.activeElement) document.activeElement.blur();
+    }
+
+    function startEdit(r) {
+      editingId = r.id;
+      document.getElementById("f_title").value = r.title;
+      document.getElementById("f_category").value = r.category;
+      document.getElementById("f_video").value = r.video_url || "";
+      document.getElementById("f_ingredients").value = (r.ingredients || []).join(", ");
+      document.getElementById("f_steps").value = (r.steps || []).join("\n");
+      document.getElementById("f_pdf").value = r.pdf_url || "";
+      document.getElementById("submitBtn").textContent = "수정 저장";
+      document.getElementById("writeForm").classList.remove("hidden");
+      document.getElementById("writeBtn").classList.add("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    async function loadRecipes() {
+      const { data, error } = await sb.from("recipes").select("*").order("created_at", { ascending: false });
+      if (error) {
+        document.getElementById("recipeGrid").innerHTML = `<div class="empty-state">불러오기 실패: ${escapeHtml(error.message)}</div>`;
+        return;
+      }
+      allRecipes = data || [];
+      renderFilterTabs();
+      if (selectedId && !allRecipes.find((x) => x.id === selectedId)) selectedId = null;
+      renderGrid();
+    }
+
+    (async () => {
+      const auth = await requireAuth();
+      if (!auth) return;
+      profileRef = auth.profile;
+      renderGnb("recipes", profileRef);
+      revealPage();
+
+      if (isVisor(profileRef)) {
+        document.getElementById("writeBtn").classList.remove("hidden");
+      }
+
+      document.getElementById("writeBtn").addEventListener("click", () => {
+        document.getElementById("writeForm").classList.remove("hidden");
+        document.getElementById("writeBtn").classList.add("hidden");
+        document.getElementById("writeForm").scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      document.getElementById("cancelBtn").addEventListener("click", () => {
+        resetForm();
+      });
+
+      document.getElementById("submitBtn").addEventListener("click", async () => {
+        const errEl = document.getElementById("formError");
+        clearFormError(errEl);
+        const title = document.getElementById("f_title").value.trim();
+        const category = document.getElementById("f_category").value;
+        const video_url = document.getElementById("f_video").value.trim() || null;
+        const pdf_url = document.getElementById("f_pdf").value.trim() || null;
+        const ingredients = document.getElementById("f_ingredients").value.split(",").map((s) => s.trim()).filter(Boolean);
+        const steps = document.getElementById("f_steps").value.split("\n").map((s) => s.trim()).filter(Boolean);
+
+        if (!title) {
+          showFormError(errEl, "메뉴 이름을 입력해주세요.");
+          return;
+        }
+
+        const payload = { title, category, video_url, pdf_url, ingredients, steps };
+        const { error } = editingId
+          ? await sb.from("recipes").update(payload).eq("id", editingId)
+          : await sb.from("recipes").insert({ ...payload, is_new: true, author_id: profileRef.id });
+
+        if (error) {
+          showFormError(errEl, "저장에 실패했습니다: " + error.message);
+          return;
+        }
+
+        if (editingId) selectedId = editingId;
+        resetForm();
+        loadRecipes();
+      });
+
+      loadRecipes();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ - GOMANGO 점주 운영 게시판</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <div id="gnb"></div>
+
+  <main class="page-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">FAQ</h1>
+        <p class="page-subtitle">자주 묻는 질문과 답변을 모아뒀어요</p>
+      </div>
+      <button id="faqAddBtn" class="btn-primary hidden">+ FAQ 추가</button>
+    </div>
+
+    <div id="faqAddForm" class="form-card hidden">
+      <div class="form-field">
+        <label>질문</label>
+        <input id="faq_q" type="text" placeholder="자주 묻는 질문을 입력하세요">
+      </div>
+      <div class="form-field">
+        <label>답변</label>
+        <textarea id="faq_a" placeholder="답변 내용을 입력하세요"></textarea>
+      </div>
+      <div id="faqFormError" class="error-text hidden"></div>
+      <div style="display:flex; gap:10px;">
+        <button id="faqSubmitBtn" class="btn-primary">등록</button>
+        <button id="faqCancelBtn" class="btn-link">취소</button>
+      </div>
+    </div>
+
+    <div id="faqList" style="display:flex; flex-direction:column; gap:12px;"><div class="empty-state">불러오는 중...</div></div>
+  </main>
+
+  <script src="assets/supabaseClient.js?v=20260918a"></script>
+  <script src="assets/app.js?v=20260918a"></script>
+  <script>
+    let profileRef = null;
+    let allFaqs = [];
+    let faqEditingId = null;
+
+    function resetFaqForm() {
+      faqEditingId = null;
+      document.getElementById("faq_q").value = "";
+      document.getElementById("faq_a").value = "";
+      document.getElementById("faqSubmitBtn").textContent = "등록";
+      document.getElementById("faqAddForm").classList.add("hidden");
+      if (document.activeElement) document.activeElement.blur();
+    }
+
+    function startFaqEdit(f) {
+      faqEditingId = f.id;
+      document.getElementById("faq_q").value = f.question;
+      document.getElementById("faq_a").value = f.answer;
+      document.getElementById("faqSubmitBtn").textContent = "수정 저장";
+      document.getElementById("faqAddForm").classList.remove("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderFaqs() {
+      const el = document.getElementById("faqList");
+      if (!allFaqs.length) {
+        el.innerHTML = '<div class="empty-state">등록된 FAQ가 없습니다</div>';
+        return;
+      }
+      el.innerHTML = allFaqs.map((f) => `
+        <div class="card" style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-size:15px; font-weight:700;">Q. ${escapeHtml(f.question)}</div>
+          <div style="font-size:14px; color:var(--ink-soft); line-height:1.6; white-space:pre-line;">A. ${escapeHtml(f.answer)}</div>
+          ${isVisor(profileRef) ? `
+            <div class="row-actions" style="margin-top:4px;">
+              <button class="btn-edit" data-id="${f.id}" data-action="edit">수정</button>
+              <button class="btn-delete" data-id="${f.id}" data-action="delete">삭제</button>
+            </div>
+          ` : ""}
+        </div>
+      `).join("");
+
+      el.querySelectorAll("[data-action='edit']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const f = allFaqs.find((x) => x.id === btn.dataset.id);
+          if (f) startFaqEdit(f);
+        });
+      });
+      el.querySelectorAll("[data-action='delete']").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("이 FAQ를 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+          const { error } = await sb.from("faqs").delete().eq("id", btn.dataset.id);
+          if (error) {
+            alert("삭제에 실패했습니다: " + error.message);
+            return;
+          }
+          loadFaqs();
+        });
+      });
+    }
+
+    async function loadFaqs() {
+      const { data, error } = await sb.from("faqs").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: true });
+      const el = document.getElementById("faqList");
+      if (error) {
+        el.innerHTML = `<div class="empty-state">FAQ를 불러오지 못했습니다: ${escapeHtml(error.message)}</div>`;
+        return;
+      }
+      allFaqs = data || [];
+      renderFaqs();
+    }
+
+    (async () => {
+      const auth = await requireAuth();
+      if (!auth) return;
+      profileRef = auth.profile;
+      renderGnb("faq", profileRef);
+      revealPage();
+
+      if (isVisor(profileRef)) {
+        document.getElementById("faqAddBtn").classList.remove("hidden");
+      }
+
+      document.getElementById("faqAddBtn").addEventListener("click", () => {
+        resetFaqForm();
+        document.getElementById("faqAddForm").classList.remove("hidden");
+        document.getElementById("faqAddForm").scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      document.getElementById("faqCancelBtn").addEventListener("click", () => {
+        resetFaqForm();
+      });
+      document.getElementById("faqSubmitBtn").addEventListener("click", async () => {
+        const errEl = document.getElementById("faqFormError");
+        clearFormError(errEl);
+        const question = document.getElementById("faq_q").value.trim();
+        const answer = document.getElementById("faq_a").value.trim();
+        if (!question || !answer) {
+          showFormError(errEl, "질문과 답변을 모두 입력해주세요.");
+          return;
+        }
+        const { error } = faqEditingId
+          ? await sb.from("faqs").update({ question, answer }).eq("id", faqEditingId)
+          : await sb.from("faqs").insert({ question, answer });
+        if (error) {
+          showFormError(errEl, "저장에 실패했습니다: " + error.message);
+          return;
+        }
+        resetFaqForm();
+        loadFaqs();
+      });
+
+      loadFaqs();
+    })();
+  </script>
+</body>
+</html>
