@@ -46,7 +46,7 @@
     (async () => {
       const { data: { session } } = await sb.auth.getSession();
       if (session) {
-        location.replace("index");
+        location.replace("home");
         return;
       }
       revealPage();
@@ -79,7 +79,7 @@
         errorMsg.classList.remove("hidden");
         return;
       }
-      location.href = "index";
+      location.href = "home";
     });
   </script>
 </body>
