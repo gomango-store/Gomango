@@ -6,7 +6,7 @@ const GNB_ITEMS = [
   { key: "home", href: "home", label: "홈" },
   { key: "recipes", href: "recipes", label: "레시피" },
   { key: "notices", href: "notices", label: "공지사항" },
-  { key: "suggestions", href: "suggestions", label: "건의함" },
+  { key: "suggestions", href: "suggestions", label: "건의함", visorOnly: true },
   { key: "faq", href: "faq", label: "FAQ" },
   { key: "orders", href: "orders", label: "본사 발주" },
   { key: "resources", href: "resources", label: "자료실" },
@@ -267,6 +267,8 @@ function categoryPillClass(category) {
 
 // 건의함 구분(문의사항/건의사항/메뉴 의견)별 색상
 const SUGGESTION_CATEGORY_PILL_MAP = {
+  "업무": "pill-amber",
+  "메모": "pill-secondary",
   "문의사항": "pill-info",
   "건의사항": "pill-amber",
   "메뉴 의견": "pill-secondary",
