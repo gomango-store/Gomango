@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>건의함 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<link rel="stylesheet" href="assets/style.css?v=20260921b">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -81,17 +81,19 @@
 
     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
       <div style="display:flex; align-items:center; gap:8px;" id="statusTabs"></div>
+      <input id="authorSearchInput" type="text" placeholder="🔍 작성자(매장명) 검색" class="hidden" style="width:220px; max-width:100%; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
     </div>
 
     <div id="suggestionList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260918a"></script>
-  <script src="assets/app.js?v=20260918a"></script>
+  <script src="assets/supabaseClient.js?v=20260921b"></script>
+  <script src="assets/app.js?v=20260921b"></script>
   <script>
     let profileRef = null;
     let allSuggestions = [];
     let currentStatus = "전체";
+    let authorSearchQuery = "";
     let editingId = null;
 
     function renderStatusTabs() {
@@ -120,14 +122,18 @@
     }
 
     function renderSuggestions() {
-      const filtered = currentStatus === "전체" ? allSuggestions : allSuggestions.filter((s) => s.status === currentStatus);
+      let filtered = currentStatus === "전체" ? allSuggestions : allSuggestions.filter((s) => s.status === currentStatus);
+      if (isVisor(profileRef) && authorSearchQuery.trim()) {
+        const aq = authorSearchQuery.trim().toLowerCase();
+        filtered = filtered.filter((s) => (s.profiles ? s.profiles.store_name : "").toLowerCase().includes(aq));
+      }
       const listEl = document.getElementById("suggestionList");
       if (filtered.length === 0) {
-        listEl.innerHTML = '<div class="empty-state">건의사항이 없습니다</div>';
+        listEl.innerHTML = `<div class="empty-state">${authorSearchQuery.trim() ? "검색 결과가 없습니다" : "건의사항이 없습니다"}</div>`;
         return;
       }
       listEl.innerHTML = filtered.map((s) => {
-        const storeLabel = s.profiles ? s.profiles.store_name : "";
+        const storeLabel = s.profiles ? s.profiles.store_name : "(탈퇴된 계정)";
         const replies = s.suggestion_replies || [];
         const replyHtml = replies.map((r) => `
           <div style="background:var(--neutral-tint); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:6px; margin-top:10px;">
@@ -230,6 +236,14 @@
       profileRef = auth.profile;
       renderGnb("suggestions", profileRef);
       revealPage();
+
+      if (isVisor(profileRef)) {
+        document.getElementById("authorSearchInput").classList.remove("hidden");
+      }
+      document.getElementById("authorSearchInput").addEventListener("input", (e) => {
+        authorSearchQuery = e.target.value;
+        renderSuggestions();
+      });
 
       // 이용 안내 펼치기/접기
       document.getElementById("noticeToggleBtn").addEventListener("click", () => {
