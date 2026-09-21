@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>본사 발주 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921b">
+<link rel="stylesheet" href="assets/style.css?v=20260921c">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -59,8 +59,8 @@
     </div>
   </div>
 
-  <script src="assets/supabaseClient.js?v=20260921b"></script>
-  <script src="assets/app.js?v=20260921b"></script>
+  <script src="assets/supabaseClient.js?v=20260921c"></script>
+  <script src="assets/app.js?v=20260921c"></script>
   <script>
     // 발주 가능 품목 목록 (필요하면 이 배열만 수정하면 됩니다)
     // extraQty가 있는 품목은 "사이즈 선택 + 수량 선택"을 함께 보여줍니다.
@@ -384,7 +384,7 @@
               <span class="pill ${o.status === "발주완료" ? "pill-green" : "pill-amber"}">${o.status}</span>
               ${payToggleHtml}
               ${itemsLineHtml}
-              <span style="font-size:12.5px; color:var(--muted);">${escapeHtml(storeLabel)}</span>
+              <span class="pill pill-info">👤 ${escapeHtml(storeLabel)}</span>
               <span style="font-size:12.5px; color:var(--muted);">${metaDateLabel(o)}</span>
             </div>
             <div class="order-total" style="margin-top:8px;">총 금액: ${formatWon(totalAmount)} ${itemsList.length === 1 ? `<span style="font-weight:400; color:var(--muted); font-size:12.5px;">(단가 ${formatWon(priceMap[itemsList[0].item_name] || 0)} × ${parseOrderQtyMultiplier(itemsList[0].quantity)})</span>` : ""}</div>
