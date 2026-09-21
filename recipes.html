@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>레시피 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921d">
+<link rel="stylesheet" href="assets/style.css?v=20260921e">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -51,6 +51,7 @@
         <label>레시피 카드 PDF 링크 (선택)</label>
         <input id="f_pdf" type="url" placeholder="https://...">
       </div>
+      <label class="checkbox-row"><input type="checkbox" id="f_hide_new"> NEW 뱃지 표시 안 함 (등록 14일 이내여도 NEW 뱃지를 숨깁니다)</label>
       <div id="formError" class="error-text hidden"></div>
       <div style="display:flex; gap:10px;">
         <button id="submitBtn" class="btn-primary">등록</button>
@@ -66,8 +67,8 @@
     <div class="recipe-grid" id="recipeGrid"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921d"></script>
-  <script src="assets/app.js?v=20260921d"></script>
+  <script src="assets/supabaseClient.js?v=20260921e"></script>
+  <script src="assets/app.js?v=20260921e"></script>
   <script>
     let allRecipes = [];
     let currentFilter = "전체";
@@ -105,7 +106,7 @@
         <div class="card recipe-detail-row" data-detail-for="${r.id}">
           <div style="display:flex; flex-direction:column; gap:16px;">
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              ${isWithinDays(r.created_at, 14) ? '<span class="pill pill-accent-solid">NEW</span>' : ""}
+              ${isWithinDays(r.created_at, 14) && !r.hide_new_badge ? '<span class="pill pill-accent-solid">NEW</span>' : ""}
               <span style="font-size:18px; font-weight:700; flex-grow:1;">${escapeHtml(r.title)}</span>
               <button class="btn-link" id="detailCloseBtn">닫기 ✕</button>
             </div>
@@ -146,7 +147,7 @@
       }
       gridEl.innerHTML = filtered.map((r) => {
         const thumbUrl = getYoutubeThumbUrl(r.video_url);
-        const isNew = isWithinDays(r.created_at, 14);
+        const isNew = isWithinDays(r.created_at, 14) && !r.hide_new_badge;
         const cardHtml = `
         <div class="recipe-card ${r.id === selectedId ? "selected" : ""}" data-id="${r.id}">
           <div class="recipe-thumb">
@@ -226,6 +227,7 @@
       editingId = null;
       ["f_title", "f_video", "f_pdf", "f_ingredients", "f_steps"].forEach((id) => (document.getElementById(id).value = ""));
       document.getElementById("f_category").value = "신메뉴";
+      document.getElementById("f_hide_new").checked = false;
       document.getElementById("submitBtn").textContent = "등록";
       document.getElementById("writeForm").classList.add("hidden");
       if (isVisor(profileRef)) document.getElementById("writeBtn").classList.remove("hidden");
@@ -240,6 +242,7 @@
       document.getElementById("f_ingredients").value = (r.ingredients || []).join(", ");
       document.getElementById("f_steps").value = (r.steps || []).join("\n");
       document.getElementById("f_pdf").value = r.pdf_url || "";
+      document.getElementById("f_hide_new").checked = !!r.hide_new_badge;
       document.getElementById("submitBtn").textContent = "수정 저장";
       document.getElementById("writeForm").classList.remove("hidden");
       document.getElementById("writeBtn").classList.add("hidden");
@@ -298,7 +301,8 @@
           return;
         }
 
-        const payload = { title, category, video_url, pdf_url, ingredients, steps };
+        const hide_new_badge = document.getElementById("f_hide_new").checked;
+        const payload = { title, category, video_url, pdf_url, ingredients, steps, hide_new_badge };
         const { error } = editingId
           ? await sb.from("recipes").update(payload).eq("id", editingId)
           : await sb.from("recipes").insert({ ...payload, is_new: true, author_id: profileRef.id });
