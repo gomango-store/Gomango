@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>업체 정보 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921b">
+<link rel="stylesheet" href="assets/style.css?v=20260921c">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -64,12 +64,29 @@
     <div id="companyList" class="card-grid"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921b"></script>
-  <script src="assets/app.js?v=20260921b"></script>
+  <script src="assets/supabaseClient.js?v=20260921c"></script>
+  <script src="assets/app.js?v=20260921c"></script>
   <script>
     let profileRef = null;
     let editingId = null;
     let allCompanies = [];
+
+    // 순서를 바꾼 뒤(위/아래), 전체 목록의 sort_order를 새 순서대로 다시 매겨서 저장합니다.
+    // 이렇게 재정렬해서 저장해두면, 초기 데이터에 sort_order가 없거나 값이 겹쳐도 항상 정상적으로 동작합니다.
+    async function moveCompany(id, direction) {
+      const list = [...allCompanies];
+      const idx = list.findIndex((c) => c.id === id);
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (idx === -1 || swapIdx < 0 || swapIdx >= list.length) return;
+      [list[idx], list[swapIdx]] = [list[swapIdx], list[idx]];
+      for (let i = 0; i < list.length; i++) {
+        const newOrder = (i + 1) * 10;
+        if (list[i].sort_order !== newOrder) {
+          await sb.from("companies").update({ sort_order: newOrder }).eq("id", list[i].id);
+        }
+      }
+      loadCompanies();
+    }
 
     function resetForm() {
       editingId = null;
@@ -101,7 +118,7 @@
         listEl.innerHTML = '<div class="empty-state">등록된 업체 정보가 없습니다</div>';
         return;
       }
-      listEl.innerHTML = allCompanies.map((c) => `
+      listEl.innerHTML = allCompanies.map((c, idx) => `
         <div class="card" style="display:flex; flex-direction:column; gap:8px;">
           <div style="display:flex; align-items:center; gap:8px;">
             <span class="pill ${categoryPillClass(c.category)}">${escapeHtml(c.category)}</span>
@@ -114,6 +131,8 @@
           <div style="font-size:12px; color:var(--muted); margin-top:2px;">${metaDateLabel(c)} 등록</div>
           ${isVisor(profileRef) ? `
             <div class="row-actions" style="margin-top:6px;">
+              <button class="btn-edit" data-id="${c.id}" data-action="move-up" ${idx === 0 ? "disabled" : ""}>↑</button>
+              <button class="btn-edit" data-id="${c.id}" data-action="move-down" ${idx === allCompanies.length - 1 ? "disabled" : ""}>↓</button>
               <button class="btn-edit" data-id="${c.id}" data-action="edit">수정</button>
               <button class="btn-delete" data-id="${c.id}" data-action="delete">삭제</button>
             </div>
@@ -121,6 +140,12 @@
         </div>
       `).join("");
 
+      listEl.querySelectorAll("[data-action='move-up']").forEach((btn) => {
+        btn.addEventListener("click", () => moveCompany(btn.dataset.id, "up"));
+      });
+      listEl.querySelectorAll("[data-action='move-down']").forEach((btn) => {
+        btn.addEventListener("click", () => moveCompany(btn.dataset.id, "down"));
+      });
       listEl.querySelectorAll("[data-action='edit']").forEach((btn) => {
         btn.addEventListener("click", () => {
           const c = allCompanies.find((x) => x.id === btn.dataset.id);
@@ -141,7 +166,7 @@
     }
 
     async function loadCompanies() {
-      const { data, error } = await sb.from("companies").select("*").order("category", { ascending: true }).order("created_at", { ascending: false });
+      const { data, error } = await sb.from("companies").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
       const listEl = document.getElementById("companyList");
       if (error) {
         listEl.innerHTML = `<div class="empty-state">불러오기 실패: ${escapeHtml(error.message)}</div>`;
@@ -187,9 +212,10 @@
         }
 
         const payload = { name, category, contact_name, phone, email, notes };
+        const nextSortOrder = allCompanies.length ? Math.max(...allCompanies.map((c) => c.sort_order || 0)) + 10 : 10;
         const { error } = editingId
           ? await sb.from("companies").update(payload).eq("id", editingId)
-          : await sb.from("companies").insert({ ...payload, author_id: profileRef.id });
+          : await sb.from("companies").insert({ ...payload, author_id: profileRef.id, sort_order: nextSortOrder });
 
         if (error) {
           showFormError(errEl, "저장에 실패했습니다: " + error.message);
