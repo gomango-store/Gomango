@@ -6,11 +6,11 @@ const GNB_ITEMS = [
   { key: "home", href: "home", label: "홈" },
   { key: "recipes", href: "recipes", label: "레시피" },
   { key: "notices", href: "notices", label: "공지사항" },
-  { key: "suggestions", href: "suggestions", label: "건의함", visorOnly: true },
   { key: "faq", href: "faq", label: "FAQ" },
   { key: "orders", href: "orders", label: "본사 발주" },
   { key: "resources", href: "resources", label: "자료실" },
   { key: "company", href: "company", label: "업체 정보" },
+  { key: "suggestions", href: "suggestions", label: "건의함", visorOnly: true },
   { key: "accounts", href: "accounts", label: "계정관리", visorOnly: true },
 ];
 
@@ -251,6 +251,10 @@ function toTelHref(phone) {
 // 목록에 없는 카테고리는 기본(pill-neutral)로 표시됩니다.
 // (pill-accent는 브랜드 노란색이라 흰 배경 위에서는 색이 잘 안 보여서 분류 태그에는 쓰지 않았습니다)
 const CATEGORY_PILL_MAP = {
+  // 공지사항
+  "정책": "pill-info",
+  "프로모션": "pill-amber",
+  "휴무/일정": "pill-secondary",
   // 자료실
   "매뉴얼": "pill-info",
   "서식": "pill-secondary",
