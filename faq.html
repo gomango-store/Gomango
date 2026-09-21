@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FAQ - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921b">
+<link rel="stylesheet" href="assets/style.css?v=20260921c">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -43,13 +43,14 @@
     <div id="faqList" style="display:flex; flex-direction:column; gap:12px;"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921b"></script>
-  <script src="assets/app.js?v=20260921b"></script>
+  <script src="assets/supabaseClient.js?v=20260921c"></script>
+  <script src="assets/app.js?v=20260921c"></script>
   <script>
     let profileRef = null;
     let allFaqs = [];
     let faqEditingId = null;
     let searchQuery = "";
+    let openFaqIds = new Set();
 
     function resetFaqForm() {
       faqEditingId = null;
@@ -62,6 +63,7 @@
 
     function startFaqEdit(f) {
       faqEditingId = f.id;
+      openFaqIds.add(f.id);
       document.getElementById("faq_q").value = f.question;
       document.getElementById("faq_a").value = f.answer;
       document.getElementById("faqSubmitBtn").textContent = "수정 저장";
@@ -81,18 +83,34 @@
         el.innerHTML = '<div class="empty-state">검색 결과가 없습니다</div>';
         return;
       }
-      el.innerHTML = filteredFaqs.map((f) => `
+      el.innerHTML = filteredFaqs.map((f) => {
+        const isOpen = openFaqIds.has(f.id);
+        return `
         <div class="card" style="display:flex; flex-direction:column; gap:8px;">
-          <div style="font-size:15px; font-weight:700;">Q. ${escapeHtml(f.question)}</div>
-          <div style="font-size:14px; color:var(--ink-soft); line-height:1.6; white-space:pre-line;">A. ${escapeHtml(f.answer)}</div>
-          ${isVisor(profileRef) ? `
-            <div class="row-actions" style="margin-top:4px;">
-              <button class="btn-edit" data-id="${f.id}" data-action="edit">수정</button>
-              <button class="btn-delete" data-id="${f.id}" data-action="delete">삭제</button>
-            </div>
+          <div class="faq-toggle-row" data-id="${f.id}" style="display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;">
+            <span style="font-size:15px; font-weight:700;">Q. ${escapeHtml(f.question)}</span>
+            <span style="font-size:13px; color:var(--accent-dark); font-weight:700; flex-shrink:0;">${isOpen ? "접기 ▴" : "펼치기 ▾"}</span>
+          </div>
+          ${isOpen ? `
+            <div style="font-size:14px; color:var(--ink-soft); line-height:1.6; white-space:pre-line;">A. ${escapeHtml(f.answer)}</div>
+            ${isVisor(profileRef) ? `
+              <div class="row-actions" style="margin-top:4px;">
+                <button class="btn-edit" data-id="${f.id}" data-action="edit">수정</button>
+                <button class="btn-delete" data-id="${f.id}" data-action="delete">삭제</button>
+              </div>
+            ` : ""}
           ` : ""}
         </div>
-      `).join("");
+      `;
+      }).join("");
+
+      el.querySelectorAll(".faq-toggle-row").forEach((row) => {
+        row.addEventListener("click", () => {
+          const id = row.dataset.id;
+          if (openFaqIds.has(id)) openFaqIds.delete(id); else openFaqIds.add(id);
+          renderFaqs();
+        });
+      });
 
       el.querySelectorAll("[data-action='edit']").forEach((btn) => {
         btn.addEventListener("click", () => {
