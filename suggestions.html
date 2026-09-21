@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>건의함 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921c">
+<link rel="stylesheet" href="assets/style.css?v=20260921d">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -15,63 +15,28 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">건의함</h1>
-        <p class="page-subtitle">불편사항이나 아이디어를 자유롭게 남겨주세요</p>
+        <p class="page-subtitle">바이저끼리 공유할 메모와 업무 내용을 남겨주세요</p>
       </div>
-      <button id="writeBtn" class="btn-primary">+ 건의사항 작성</button>
-    </div>
-
-    <!-- 건의함 게시판 이용 안내 -->
-    <div class="card" style="background:var(--neutral-tint);">
-      <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" id="noticeToggleBtn">
-        <span style="font-size:15px; font-weight:700; color:var(--ink);">📌 건의함 게시판 이용 안내</span>
-        <span id="noticeToggleIcon" style="font-size:13px; color:var(--muted); flex-shrink:0;">접기 ▴</span>
-      </div>
-      <div id="noticeBody" style="margin-top:12px; font-size:13.5px; color:var(--ink-soft); line-height:1.7;">
-        <p style="margin:0 0 14px;">원활하고 정확한 업무 처리를 위해 아래 내용을 확인하시고 이용 부탁드립니다.</p>
-        <div style="display:flex; flex-direction:column; gap:12px;">
-          <div>
-            <div style="font-weight:700; color:var(--ink); margin-bottom:3px;">1. 언어 폭력 및 비속어 사용 금지</div>
-            <div>- 원활한 소통을 위해 욕설, 비속어 및 언어폭력성 표현은 삼가주시기 바랍니다.</div>
-            <div style="font-weight:700; color:#C0392B; margin-top:4px;">※ 심한 욕설, 비방 및 모욕적인 표현이 포함된 게시글은 내용에 따라 법적 조치 및 처벌의 대상이 될 수 있습니다.</div>
-          </div>
-          <div>
-            <div style="font-weight:700; color:var(--ink); margin-bottom:3px;">2. 내용 확인을 위한 연락 안내</div>
-            <div>- 요청사항 확인이 필요하거나 추가적인 내용 확인이 필요한 경우 담당자가 전화드릴 수 있습니다.</div>
-          </div>
-          <div>
-            <div style="font-weight:700; color:var(--ink); margin-bottom:3px;">3. 정확한 요청사항 작성</div>
-            <div>- 문의 및 요청사항은 담당자가 정확히 확인할 수 있도록 구체적인 내용과 요청사항을 함께 작성해주시기 바랍니다.</div>
-          </div>
-          <div>
-            <div style="font-weight:700; color:var(--ink); margin-bottom:3px;">4. 사진 첨부가 필요한 경우</div>
-            <div>- 사진 확인이 필요한 문의는 게시판에 사진을 직접 첨부하기 어려우므로 담당 바이저에게 문자 또는 카카오톡으로 사진을 보내주시기 바랍니다.</div>
-          </div>
-          <div>
-            <div style="font-weight:700; color:var(--ink); margin-bottom:3px;">5. 물류 관련 문의 및 반품 접수</div>
-            <div>- 물류 관련 문의 및 반품 접수는 물류사 📞 <strong style="color:var(--ink);">1688-6400</strong>으로 직접 요청해주시기 바랍니다.</div>
-          </div>
-        </div>
-        <p style="margin:16px 0 0; font-weight:600; color:var(--ink);">매장과 본사 간 원활하고 신속한 소통을 위해 위 내용을 준수하여 게시판을 이용해주시기 바랍니다.</p>
-      </div>
+      <button id="writeBtn" class="btn-primary">+ 메모 작성</button>
     </div>
 
     <div id="writeForm" class="form-card hidden">
       <div class="form-field">
         <label>구분</label>
         <select id="f_type">
-          <option value="건의사항" selected>건의사항</option>
-          <option value="문의사항">문의사항</option>
+          <option value="업무" selected>업무</option>
+          <option value="메모">메모</option>
         </select>
       </div>
       <div class="form-field">
         <label>제목</label>
-        <input id="f_title" type="text" placeholder="건의 제목을 입력하세요">
+        <input id="f_title" type="text" placeholder="제목을 입력하세요">
       </div>
       <div class="form-field">
         <label>내용</label>
-        <textarea id="f_content" placeholder="내용을 자세히 적어주시면 답변에 도움이 됩니다"></textarea>
+        <textarea id="f_content" placeholder="공유할 내용을 자세히 적어주세요"></textarea>
       </div>
-      <p style="font-size:12.5px; color:var(--muted); margin:0;">해당 내용은 담당바이저 및 작성자 본인에게만 노출됩니다.</p>
+      <p style="font-size:12.5px; color:var(--muted); margin:0;">이 내용은 바이저 계정에게만 노출됩니다.</p>
       <div id="formError" class="error-text hidden"></div>
       <div style="display:flex; gap:10px;">
         <button id="submitBtn" class="btn-primary">등록</button>
@@ -81,14 +46,14 @@
 
     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
       <div style="display:flex; align-items:center; gap:8px;" id="statusTabs"></div>
-      <input id="authorSearchInput" type="text" placeholder="🔍 작성자(매장명) 검색" class="hidden" style="width:220px; max-width:100%; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
+      <input id="authorSearchInput" type="text" placeholder="🔍 작성자 검색" style="width:220px; max-width:100%; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
     </div>
 
     <div id="suggestionList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921c"></script>
-  <script src="assets/app.js?v=20260921c"></script>
+  <script src="assets/supabaseClient.js?v=20260921d"></script>
+  <script src="assets/app.js?v=20260921d"></script>
   <script>
     let profileRef = null;
     let allSuggestions = [];
@@ -97,7 +62,7 @@
     let editingId = null;
 
     function renderStatusTabs() {
-      const statuses = ["전체", "답변대기", "답변완료"];
+      const statuses = ["전체", "진행중", "완료"];
       document.getElementById("statusTabs").innerHTML = statuses.map((s) => {
         const count = s === "전체" ? allSuggestions.length : allSuggestions.filter((x) => x.status === s).length;
         return `<button class="tab-pill ${s === currentStatus ? "active" : ""}" data-status="${s}">${s} ${count}</button>`;
@@ -113,7 +78,7 @@
 
     function startEdit(s) {
       editingId = s.id;
-      document.getElementById("f_type").value = s.category || "건의사항";
+      document.getElementById("f_type").value = s.category || "업무";
       document.getElementById("f_title").value = s.title;
       document.getElementById("f_content").value = s.content;
       document.getElementById("submitBtn").textContent = "수정 저장";
@@ -123,13 +88,13 @@
 
     function renderSuggestions() {
       let filtered = currentStatus === "전체" ? allSuggestions : allSuggestions.filter((s) => s.status === currentStatus);
-      if (isVisor(profileRef) && authorSearchQuery.trim()) {
+      if (authorSearchQuery.trim()) {
         const aq = authorSearchQuery.trim().toLowerCase();
         filtered = filtered.filter((s) => (s.profiles ? s.profiles.store_name : "").toLowerCase().includes(aq));
       }
       const listEl = document.getElementById("suggestionList");
       if (filtered.length === 0) {
-        listEl.innerHTML = `<div class="empty-state">${authorSearchQuery.trim() ? "검색 결과가 없습니다" : "건의사항이 없습니다"}</div>`;
+        listEl.innerHTML = `<div class="empty-state">${authorSearchQuery.trim() ? "검색 결과가 없습니다" : "등록된 메모가 없습니다"}</div>`;
         return;
       }
       listEl.innerHTML = filtered.map((s) => {
@@ -138,22 +103,22 @@
         const replyHtml = replies.map((r) => `
           <div style="background:var(--neutral-tint); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:6px; margin-top:10px;">
             <div style="display:flex; align-items:center; gap:8px;">
-              <span class="pill pill-accent">본사 답변</span>
+              <span class="pill pill-accent">댓글</span>
               <span style="font-size:12px; color:var(--muted);">${formatDateTime(r.created_at)}</span>
             </div>
             <div style="font-size:13.5px; color:var(--ink); line-height:1.55;">${escapeHtml(r.content)}</div>
           </div>
         `).join("");
 
-        const canReply = isVisor(profileRef) && s.status === "답변대기";
+        const canReply = isVisor(profileRef) && s.status === "진행중";
         const replyFormHtml = canReply ? `
           <div style="margin-top:10px; display:flex; gap:8px;">
-            <input type="text" class="reply-input" data-id="${s.id}" placeholder="답변을 입력하세요" style="flex-grow:1; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
-            <button class="btn-primary reply-submit" data-id="${s.id}" style="padding:9px 16px;">답변등록</button>
+            <input type="text" class="reply-input" data-id="${s.id}" placeholder="댓글을 입력하세요" style="flex-grow:1; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
+            <button class="btn-primary reply-submit" data-id="${s.id}" style="padding:9px 16px;">댓글 등록</button>
           </div>
         ` : "";
 
-        const canEdit = isVisor(profileRef) || s.owner_id === profileRef.id;
+        const canEdit = isVisor(profileRef);
         const canDelete = isVisor(profileRef);
         const actionsHtml = (canEdit || canDelete) ? `
           <div class="row-actions" style="margin-top:10px;">
@@ -165,8 +130,8 @@
         return `
           <div class="card suggestion-item">
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-              <span class="pill ${suggestionCategoryPillClass(s.category)}">${escapeHtml(s.category || "건의사항")}</span>
-              <span class="pill ${s.status === "답변완료" ? "pill-green" : "pill-amber"}">${s.status}</span>
+              <span class="pill ${suggestionCategoryPillClass(s.category)}">${escapeHtml(s.category || "업무")}</span>
+              <span class="pill ${s.status === "완료" ? "pill-green" : "pill-amber"}">${s.status}</span>
               <span style="font-size:15px; font-weight:700; flex-grow:1;">${escapeHtml(s.title)}</span>
               <span class="pill pill-info">👤 ${escapeHtml(storeLabel)}</span>
               <span style="font-size:12.5px; color:var(--muted);">${metaDateLabel(s)}</span>
@@ -190,7 +155,7 @@
             suggestion_id: id, content, author_id: profileRef.id,
           });
           if (!replyError) {
-            await sb.from("suggestions").update({ status: "답변완료" }).eq("id", id);
+            await sb.from("suggestions").update({ status: "완료" }).eq("id", id);
           }
           btn.disabled = false;
           loadSuggestions();
@@ -205,7 +170,7 @@
       });
       listEl.querySelectorAll("[data-action='delete']").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          if (!confirm("이 건의사항을 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+          if (!confirm("이 메모를 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
           const { error } = await sb.from("suggestions").delete().eq("id", btn.dataset.id);
           if (error) {
             alert("삭제에 실패했습니다: " + error.message);
@@ -234,33 +199,26 @@
       const auth = await requireAuth();
       if (!auth) return;
       profileRef = auth.profile;
+      if (!isVisor(profileRef)) {
+        location.replace("home");
+        return;
+      }
       renderGnb("suggestions", profileRef);
       revealPage();
 
-      if (isVisor(profileRef)) {
-        document.getElementById("authorSearchInput").classList.remove("hidden");
-      }
       document.getElementById("authorSearchInput").addEventListener("input", (e) => {
         authorSearchQuery = e.target.value;
         renderSuggestions();
       });
 
-      // 이용 안내 펼치기/접기
-      document.getElementById("noticeToggleBtn").addEventListener("click", () => {
-        const bodyEl = document.getElementById("noticeBody");
-        const iconEl = document.getElementById("noticeToggleIcon");
-        const nowHidden = bodyEl.classList.toggle("hidden");
-        iconEl.textContent = nowHidden ? "펼치기 ▾" : "접기 ▴";
-      });
-
-      // 건의사항 작성 폼
+      // 메모 작성 폼
       document.getElementById("writeBtn").addEventListener("click", () => {
         document.getElementById("writeForm").classList.remove("hidden");
         document.getElementById("writeForm").scrollIntoView({ behavior: "smooth", block: "center" });
       });
       document.getElementById("cancelBtn").addEventListener("click", () => {
         editingId = null;
-        document.getElementById("f_type").value = "건의사항";
+        document.getElementById("f_type").value = "업무";
         document.getElementById("f_title").value = "";
         document.getElementById("f_content").value = "";
         document.getElementById("submitBtn").textContent = "등록";
@@ -279,13 +237,13 @@
         }
         const { error } = editingId
           ? await sb.from("suggestions").update({ category, title, content }).eq("id", editingId)
-          : await sb.from("suggestions").insert({ category, title, content, owner_id: profileRef.id, status: "답변대기" });
+          : await sb.from("suggestions").insert({ category, title, content, owner_id: profileRef.id, status: "진행중" });
         if (error) {
           showFormError(errEl, "저장에 실패했습니다: " + error.message);
           return;
         }
         editingId = null;
-        document.getElementById("f_type").value = "건의사항";
+        document.getElementById("f_type").value = "업무";
         document.getElementById("f_title").value = "";
         document.getElementById("f_content").value = "";
         document.getElementById("submitBtn").textContent = "등록";
