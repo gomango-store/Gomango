@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>레시피 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<link rel="stylesheet" href="assets/style.css?v=20260921b">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -58,16 +58,20 @@
       </div>
     </div>
 
-    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;" id="filterTabs"></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;" id="filterTabs"></div>
+      <input id="searchInput" type="text" placeholder="🔍 메뉴 이름 검색" style="width:220px; max-width:100%; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
+    </div>
 
     <div class="recipe-grid" id="recipeGrid"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260918a"></script>
-  <script src="assets/app.js?v=20260918a"></script>
+  <script src="assets/supabaseClient.js?v=20260921b"></script>
+  <script src="assets/app.js?v=20260921b"></script>
   <script>
     let allRecipes = [];
     let currentFilter = "전체";
+    let searchQuery = "";
     let selectedId = null;
     let profileRef = null;
     let editingId = null;
@@ -126,10 +130,12 @@
     }
 
     function renderGrid() {
-      const filtered = currentFilter === "전체" ? allRecipes : allRecipes.filter((r) => r.category === currentFilter);
+      let filtered = currentFilter === "전체" ? allRecipes : allRecipes.filter((r) => r.category === currentFilter);
+      const searchQ = searchQuery.trim().toLowerCase();
+      if (searchQ) filtered = filtered.filter((r) => r.title.toLowerCase().includes(searchQ));
       const gridEl = document.getElementById("recipeGrid");
       if (filtered.length === 0) {
-        gridEl.innerHTML = '<div class="empty-state">등록된 레시피가 없습니다</div>';
+        gridEl.innerHTML = `<div class="empty-state">${searchQ ? "검색 결과가 없습니다" : "등록된 레시피가 없습니다"}</div>`;
         return;
       }
       gridEl.innerHTML = filtered.map((r) => {
@@ -252,6 +258,11 @@
       profileRef = auth.profile;
       renderGnb("recipes", profileRef);
       revealPage();
+
+      document.getElementById("searchInput").addEventListener("input", (e) => {
+        searchQuery = e.target.value;
+        renderGrid();
+      });
 
       if (isVisor(profileRef)) {
         document.getElementById("writeBtn").classList.remove("hidden");
