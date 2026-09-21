@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>계정관리 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921b">
+<link rel="stylesheet" href="assets/style.css?v=20260921c">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -69,11 +69,10 @@
     </div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921b"></script>
-  <script src="assets/app.js?v=20260921b"></script>
+  <script src="assets/supabaseClient.js?v=20260921c"></script>
+  <script src="assets/app.js?v=20260921c"></script>
   <script>
     let profileRef = null;
-    let sessionRef = null;
     let editingId = null;
     let allAccounts = [];
     let searchQuery = "";
@@ -81,12 +80,19 @@
     const ROLE_LABEL = { owner: "점주", visor: "바이저" };
 
     // 계정 생성/수정/삭제/목록 조회는 관리자 권한이 필요해서 Edge Function(admin-users)을 통해 처리합니다.
+    // 페이지를 오래 열어두면 로그인 토큰이 만료될 수 있어서, 호출할 때마다 매번 최신 세션을 다시 확인해서 씁니다
+    // (예전에는 페이지 진입 시점의 토큰을 계속 재사용해서, 시간이 지나면 "401 Unauthorized" 오류가 간헐적으로 발생했습니다).
     async function callAdmin(action, payload) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) {
+        location.replace("login");
+        throw new Error("로그인이 만료되었습니다. 다시 로그인해주세요.");
+      }
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/admin-users`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${sessionRef.access_token}`,
+          "Authorization": `Bearer ${session.access_token}`,
           "apikey": SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ action, ...payload }),
@@ -283,7 +289,6 @@
       const auth = await requireAuth();
       if (!auth) return;
       profileRef = auth.profile;
-      sessionRef = auth.session;
 
       if (!isVisor(profileRef)) {
         location.replace("home");
