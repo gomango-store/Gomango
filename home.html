@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921d">
+<link rel="stylesheet" href="assets/style.css?v=20260921e">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -39,8 +39,8 @@
     </div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921d"></script>
-  <script src="assets/app.js?v=20260921d"></script>
+  <script src="assets/supabaseClient.js?v=20260921e"></script>
+  <script src="assets/app.js?v=20260921e"></script>
   <script>
     (async () => {
       const auth = await requireAuth();
@@ -69,7 +69,7 @@
         sb.from("notices").select("*", { count: "exact", head: true }),
         sb.from("notices").select("*", { count: "exact", head: true }).eq("is_pinned", true),
         sb.from("recipes").select("*", { count: "exact", head: true }),
-        sb.from("recipes").select("*", { count: "exact", head: true }).gte("created_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()),
+        sb.from("recipes").select("*", { count: "exact", head: true }).gte("created_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()).eq("hide_new_badge", false),
         sb.from("suggestions").select("*", { count: "exact", head: true }).eq("status", "진행중"),
         sb.from("resources").select("*", { count: "exact", head: true }),
         sb.from("supply_requests").select("*", { count: "exact", head: true }).eq("status", "요청"),
