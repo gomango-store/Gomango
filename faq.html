@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FAQ - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<link rel="stylesheet" href="assets/style.css?v=20260921b">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -36,15 +36,20 @@
       </div>
     </div>
 
+    <div style="display:flex; justify-content:flex-end;">
+      <input id="searchInput" type="text" placeholder="🔍 질문/답변 검색" style="width:220px; max-width:100%; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
+    </div>
+
     <div id="faqList" style="display:flex; flex-direction:column; gap:12px;"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260918a"></script>
-  <script src="assets/app.js?v=20260918a"></script>
+  <script src="assets/supabaseClient.js?v=20260921b"></script>
+  <script src="assets/app.js?v=20260921b"></script>
   <script>
     let profileRef = null;
     let allFaqs = [];
     let faqEditingId = null;
+    let searchQuery = "";
 
     function resetFaqForm() {
       faqEditingId = null;
@@ -70,7 +75,13 @@
         el.innerHTML = '<div class="empty-state">등록된 FAQ가 없습니다</div>';
         return;
       }
-      el.innerHTML = allFaqs.map((f) => `
+      const searchQ = searchQuery.trim().toLowerCase();
+      const filteredFaqs = searchQ ? allFaqs.filter((f) => f.question.toLowerCase().includes(searchQ) || f.answer.toLowerCase().includes(searchQ)) : allFaqs;
+      if (filteredFaqs.length === 0) {
+        el.innerHTML = '<div class="empty-state">검색 결과가 없습니다</div>';
+        return;
+      }
+      el.innerHTML = filteredFaqs.map((f) => `
         <div class="card" style="display:flex; flex-direction:column; gap:8px;">
           <div style="font-size:15px; font-weight:700;">Q. ${escapeHtml(f.question)}</div>
           <div style="font-size:14px; color:var(--ink-soft); line-height:1.6; white-space:pre-line;">A. ${escapeHtml(f.answer)}</div>
@@ -119,6 +130,11 @@
       profileRef = auth.profile;
       renderGnb("faq", profileRef);
       revealPage();
+
+      document.getElementById("searchInput").addEventListener("input", (e) => {
+        searchQuery = e.target.value;
+        renderFaqs();
+      });
 
       if (isVisor(profileRef)) {
         document.getElementById("faqAddBtn").classList.remove("hidden");
