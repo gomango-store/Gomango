@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>자료실 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<link rel="stylesheet" href="assets/style.css?v=20260921b">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -47,15 +47,20 @@
       </div>
     </div>
 
+    <div style="display:flex; justify-content:flex-end;">
+      <input id="searchInput" type="text" placeholder="🔍 자료 제목 검색" style="width:220px; max-width:100%; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
+    </div>
+
     <div id="resourceList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260918a"></script>
-  <script src="assets/app.js?v=20260918a"></script>
+  <script src="assets/supabaseClient.js?v=20260921b"></script>
+  <script src="assets/app.js?v=20260921b"></script>
   <script>
     let profileRef = null;
     let editingId = null;
     let allResources = [];
+    let searchQuery = "";
 
     function resetForm() {
       editingId = null;
@@ -85,7 +90,13 @@
         listEl.innerHTML = '<div class="empty-state">등록된 자료가 없습니다</div>';
         return;
       }
-      listEl.innerHTML = allResources.map((r) => `
+      const searchQ = searchQuery.trim().toLowerCase();
+      const filteredResources = searchQ ? allResources.filter((r) => r.title.toLowerCase().includes(searchQ)) : allResources;
+      if (filteredResources.length === 0) {
+        listEl.innerHTML = '<div class="empty-state">검색 결과가 없습니다</div>';
+        return;
+      }
+      listEl.innerHTML = filteredResources.map((r) => `
         <div class="card resource-item" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
           <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" style="display:flex; align-items:center; gap:14px; flex-grow:1; min-width:0;">
             <span class="pill ${categoryPillClass(r.category)}">${escapeHtml(r.category)}</span>
@@ -138,6 +149,11 @@
       profileRef = auth.profile;
       renderGnb("resources", profileRef);
       revealPage();
+
+      document.getElementById("searchInput").addEventListener("input", (e) => {
+        searchQuery = e.target.value;
+        renderResources();
+      });
 
       if (isVisor(profileRef)) {
         document.getElementById("writeBtn").classList.remove("hidden");
