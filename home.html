@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921c">
+<link rel="stylesheet" href="assets/style.css?v=20260921d">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -29,9 +29,9 @@
         </div>
         <div id="recentNotices"><div class="empty-state">불러오는 중...</div></div>
       </div>
-      <div class="card">
+      <div class="card hidden" id="recentSuggestionsCard">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <span style="font-size:16px; font-weight:700;">최근 건의사항</span>
+          <span style="font-size:16px; font-weight:700;">최근 메모</span>
           <a href="suggestions" style="font-size:13px; color:var(--muted);">전체보기</a>
         </div>
         <div id="recentSuggestions"><div class="empty-state">불러오는 중...</div></div>
@@ -39,8 +39,8 @@
     </div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921c"></script>
-  <script src="assets/app.js?v=20260921c"></script>
+  <script src="assets/supabaseClient.js?v=20260921d"></script>
+  <script src="assets/app.js?v=20260921d"></script>
   <script>
     (async () => {
       const auth = await requireAuth();
@@ -48,6 +48,12 @@
       const { profile } = auth;
       renderGnb("home", profile);
       revealPage();
+
+      if (isVisor(profile)) {
+        document.getElementById("recentSuggestionsCard").classList.remove("hidden");
+      } else {
+        document.getElementById("recentSection").style.gridTemplateColumns = "1fr";
+      }
 
       // 카운트 조회
       const [
@@ -64,7 +70,7 @@
         sb.from("notices").select("*", { count: "exact", head: true }).eq("is_pinned", true),
         sb.from("recipes").select("*", { count: "exact", head: true }),
         sb.from("recipes").select("*", { count: "exact", head: true }).gte("created_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()),
-        sb.from("suggestions").select("*", { count: "exact", head: true }).eq("status", "답변대기"),
+        sb.from("suggestions").select("*", { count: "exact", head: true }).eq("status", "진행중"),
         sb.from("resources").select("*", { count: "exact", head: true }),
         sb.from("supply_requests").select("*", { count: "exact", head: true }).eq("status", "요청"),
         sb.from("companies").select("*", { count: "exact", head: true }),
@@ -83,12 +89,14 @@
           <div class="quick-desc">회사 소식, 정책 변경, 프로모션 안내 등 필독 공지를 확인하세요</div>
           <div class="quick-footer"><span class="pill pill-amber">필독 ${pinnedCount || 0}건</span><span style="font-size:13px; color:var(--muted);">바로가기 ›</span></div>
         </a>
+        ${isVisor(profile) ? `
         <a href="suggestions" class="card quick-card">
           <div class="quick-icon" style="background:var(--secondary-tint); color:var(--secondary-dark);">💬</div>
           <div class="quick-title">건의함</div>
-          <div class="quick-desc">불편사항·아이디어를 남기고 답변을 받아보세요</div>
-          <div class="quick-footer"><span class="pill pill-secondary">답변대기 ${suggestionPendingCount || 0}건</span><span style="font-size:13px; color:var(--muted);">바로가기 ›</span></div>
+          <div class="quick-desc">바이저끼리 공유하는 업무 메모를 확인하세요</div>
+          <div class="quick-footer"><span class="pill pill-secondary">진행중 ${suggestionPendingCount || 0}건</span><span style="font-size:13px; color:var(--muted);">바로가기 ›</span></div>
         </a>
+        ` : ""}
         <a href="orders" class="card quick-card">
           <div class="quick-icon" style="background:var(--secondary-tint); color:var(--secondary-dark);">📦</div>
           <div class="quick-title">본사 발주</div>
@@ -202,30 +210,32 @@
       `).join("");
       document.getElementById("recentNotices").innerHTML = noticesHtml || '<div class="empty-state">등록된 공지사항이 없습니다</div>';
 
-      // 최근 건의사항 (RLS에 의해 본인 글 + 바이저는 전체가 조회됨) - 내용/답변 모두 20자까지만 미리보기로 보여줍니다
-      const { data: recentSuggestions } = await sb
-        .from("suggestions")
-        .select("*, suggestion_replies(content, created_at)")
-        .order("created_at", { ascending: false })
-        .limit(3);
-      const sugHtml = (recentSuggestions || []).map((s) => {
-        const replies = s.suggestion_replies || [];
-        const latestReply = replies.length
-          ? replies.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
-          : null;
-        return `
-        <div class="list-row" style="flex-direction:column; align-items:stretch; gap:6px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-            <span style="font-size:14.5px; font-weight:500; ${previewStyle} flex-grow:1; min-width:0;">${escapeHtml(s.title)}</span>
-            <span style="font-size:13px; color:var(--muted); flex-shrink:0;">${formatDate(s.created_at)}</span>
+      // 최근 메모 (바이저 전용) - 내용/댓글 모두 20자까지만 미리보기로 보여줍니다
+      if (isVisor(profile)) {
+        const { data: recentSuggestions } = await sb
+          .from("suggestions")
+          .select("*, suggestion_replies(content, created_at)")
+          .order("created_at", { ascending: false })
+          .limit(3);
+        const sugHtml = (recentSuggestions || []).map((s) => {
+          const replies = s.suggestion_replies || [];
+          const latestReply = replies.length
+            ? replies.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+            : null;
+          return `
+          <div class="list-row" style="flex-direction:column; align-items:stretch; gap:6px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <span style="font-size:14.5px; font-weight:500; ${previewStyle} flex-grow:1; min-width:0;">${escapeHtml(s.title)}</span>
+              <span style="font-size:13px; color:var(--muted); flex-shrink:0;">${formatDate(s.created_at)}</span>
+            </div>
+            <span style="font-size:13px; color:var(--ink-soft); ${previewStyle}">${escapeHtml(truncate(s.content, 20))}</span>
+            ${latestReply ? `<span style="font-size:12.5px; color:var(--accent-dark); ${previewStyle}">↳ 댓글: ${escapeHtml(truncate(latestReply.content, 20))}</span>` : ""}
+            <span class="pill ${s.status === "완료" ? "pill-green" : "pill-amber"}" style="width:fit-content;">${s.status}</span>
           </div>
-          <span style="font-size:13px; color:var(--ink-soft); ${previewStyle}">${escapeHtml(truncate(s.content, 20))}</span>
-          ${latestReply ? `<span style="font-size:12.5px; color:var(--accent-dark); ${previewStyle}">↳ 답변: ${escapeHtml(truncate(latestReply.content, 20))}</span>` : ""}
-          <span class="pill ${s.status === "답변완료" ? "pill-green" : "pill-amber"}" style="width:fit-content;">${s.status}</span>
-        </div>
-      `;
-      }).join("");
-      document.getElementById("recentSuggestions").innerHTML = sugHtml || '<div class="empty-state">등록된 건의사항이 없습니다</div>';
+        `;
+        }).join("");
+        document.getElementById("recentSuggestions").innerHTML = sugHtml || '<div class="empty-state">등록된 메모가 없습니다</div>';
+      }
     })();
   </script>
 </body>
