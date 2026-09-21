@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>레시피 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921b">
+<link rel="stylesheet" href="assets/style.css?v=20260921c">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -66,8 +66,8 @@
     <div class="recipe-grid" id="recipeGrid"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921b"></script>
-  <script src="assets/app.js?v=20260921b"></script>
+  <script src="assets/supabaseClient.js?v=20260921c"></script>
+  <script src="assets/app.js?v=20260921c"></script>
   <script>
     let allRecipes = [];
     let currentFilter = "전체";
@@ -77,17 +77,23 @@
     let editingId = null;
 
     function renderFilterTabs() {
-      const cats = ["전체", "신메뉴", "시즌 메뉴", "베이직 메뉴"];
-      document.getElementById("filterTabs").innerHTML = cats.map((c) => {
-        const count = c === "전체" ? allRecipes.length : allRecipes.filter((r) => r.category === c).length;
-        return `<button class="tab-pill ${c === currentFilter ? "active" : ""}" data-cat="${c}">${c} ${count}</button>`;
-      }).join("");
-      document.querySelectorAll(".tab-pill").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          currentFilter = btn.dataset.cat;
-          renderFilterTabs();
-          renderGrid();
-        });
+      const total = allRecipes.length;
+      const cats = ["신메뉴", "시즌 메뉴", "베이직 메뉴"];
+      const wrap = document.getElementById("filterTabs");
+      const countLabel = currentFilter === "전체"
+        ? `전체 ${total}`
+        : `전체 ${allRecipes.filter((r) => r.category === currentFilter).length}/${total}`;
+      wrap.innerHTML = `
+        <span style="font-size:14px; font-weight:700;">${countLabel}</span>
+        <select id="categoryFilterSelect" style="font-family:inherit; font-size:13.5px; padding:8px 12px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--ink);">
+          <option value="전체" ${currentFilter === "전체" ? "selected" : ""}>카테고리 전체</option>
+          ${cats.map((c) => `<option value="${c}" ${currentFilter === c ? "selected" : ""}>${c}</option>`).join("")}
+        </select>
+      `;
+      document.getElementById("categoryFilterSelect").addEventListener("change", (e) => {
+        currentFilter = e.target.value;
+        renderFilterTabs();
+        renderGrid();
       });
     }
 
