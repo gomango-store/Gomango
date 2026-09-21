@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>공지사항 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921d">
+<link rel="stylesheet" href="assets/style.css?v=20260921e">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -60,8 +60,8 @@
     <div id="noticeList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921d"></script>
-  <script src="assets/app.js?v=20260921d"></script>
+  <script src="assets/supabaseClient.js?v=20260921e"></script>
+  <script src="assets/app.js?v=20260921e"></script>
   <script>
     let profileRef = null;
     let editingId = null;
@@ -110,8 +110,9 @@
         <div class="card notice-item">
           <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
             ${n.is_pinned ? '<span class="pill pill-amber-solid">필독</span>' : isWithinDays(n.created_at, 7) ? '<span class="pill pill-secondary">NEW</span>' : ""}
+            <span class="pill ${categoryPillClass(n.category)}">${escapeHtml(n.category)}</span>
             <span style="font-size:16px; font-weight:700; flex-grow:1;">${escapeHtml(n.title)}</span>
-            <span style="font-size:13px; color:var(--muted);">${escapeHtml(n.category)} · ${metaDateLabel(n)}</span>
+            <span style="font-size:13px; color:var(--muted);">${metaDateLabel(n)}</span>
           </div>
           <div style="margin-top:10px; font-size:14px; color:var(--ink-soft); line-height:1.6; white-space:pre-line;">${escapeHtml(n.content)}</div>
           ${n.image_url ? `
