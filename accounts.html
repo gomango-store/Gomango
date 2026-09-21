@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>계정관리 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921d">
+<link rel="stylesheet" href="assets/style.css?v=20260921e">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -69,8 +69,8 @@
     </div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921d"></script>
-  <script src="assets/app.js?v=20260921d"></script>
+  <script src="assets/supabaseClient.js?v=20260921e"></script>
+  <script src="assets/app.js?v=20260921e"></script>
   <script>
     let profileRef = null;
     let editingId = null;
@@ -125,7 +125,7 @@
       document.getElementById("f_role").value = a.role;
       document.getElementById("f_password").value = "";
       document.getElementById("passwordLabel").textContent = "새 비밀번호 (선택)";
-      document.getElementById("passwordHint").textContent = "비밀번호를 바꾸지 않으려면 비워두세요.";
+      document.getElementById("passwordHint").textContent = "비밀번호를 바꾸지 않으려면 비워두세요. (보안상 현재 비밀번호는 조회할 수 없어요. 확인이 필요하면 여기에 새 비밀번호를 입력해서 바꿔주세요.)";
       document.getElementById("submitBtn").textContent = "수정 저장";
       document.getElementById("writeForm").classList.remove("hidden");
       document.getElementById("writeForm").scrollIntoView({ behavior: "smooth", block: "center" });
