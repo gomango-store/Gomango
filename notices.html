@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>공지사항 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260918a">
+<link rel="stylesheet" href="assets/style.css?v=20260921b">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -53,15 +53,20 @@
       </div>
     </div>
 
+    <div style="display:flex; justify-content:flex-end;">
+      <input id="searchInput" type="text" placeholder="🔍 제목/내용 검색" style="width:220px; max-width:100%; font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--border); border-radius:8px;">
+    </div>
+
     <div id="noticeList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260918a"></script>
-  <script src="assets/app.js?v=20260918a"></script>
+  <script src="assets/supabaseClient.js?v=20260921b"></script>
+  <script src="assets/app.js?v=20260921b"></script>
   <script>
     let profileRef = null;
     let editingId = null;
     let allNotices = [];
+    let searchQuery = "";
 
     function resetForm() {
       editingId = null;
@@ -95,7 +100,13 @@
         listEl.innerHTML = '<div class="empty-state">등록된 공지사항이 없습니다</div>';
         return;
       }
-      listEl.innerHTML = allNotices.map((n) => `
+      const searchQ = searchQuery.trim().toLowerCase();
+      const filteredNotices = searchQ ? allNotices.filter((n) => n.title.toLowerCase().includes(searchQ) || n.content.toLowerCase().includes(searchQ)) : allNotices;
+      if (filteredNotices.length === 0) {
+        listEl.innerHTML = '<div class="empty-state">검색 결과가 없습니다</div>';
+        return;
+      }
+      listEl.innerHTML = filteredNotices.map((n) => `
         <div class="card notice-item">
           <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
             ${n.is_pinned ? '<span class="pill pill-amber-solid">필독</span>' : isWithinDays(n.created_at, 7) ? '<span class="pill pill-secondary">NEW</span>' : ""}
@@ -157,6 +168,11 @@
       profileRef = auth.profile;
       renderGnb("notices", profileRef);
       revealPage();
+
+      document.getElementById("searchInput").addEventListener("input", (e) => {
+        searchQuery = e.target.value;
+        renderNotices();
+      });
 
       if (isVisor(profileRef)) {
         document.getElementById("writeBtn").classList.remove("hidden");
