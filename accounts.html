@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>계정관리 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921e">
+<link rel="stylesheet" href="assets/style.css?v=20260921g">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -69,15 +69,15 @@
     </div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921e"></script>
-  <script src="assets/app.js?v=20260921e"></script>
+  <script src="assets/supabaseClient.js?v=20260921g"></script>
+  <script src="assets/app.js?v=20260921g"></script>
   <script>
     let profileRef = null;
     let editingId = null;
     let allAccounts = [];
     let searchQuery = "";
 
-    const ROLE_LABEL = { owner: "점주", visor: "바이저" };
+    const ROLE_LABEL = { owner: "점주", visor: "바이저", master: "마스터" };
 
     // 계정 생성/수정/삭제/목록 조회는 관리자 권한이 필요해서 Edge Function(admin-users)을 통해 처리합니다.
     // 페이지를 오래 열어두면 로그인 토큰이 만료될 수 있어서, 호출할 때마다 매번 최신 세션을 다시 확인해서 씁니다
@@ -107,7 +107,11 @@
       document.getElementById("f_email").value = "";
       document.getElementById("f_email").disabled = false;
       document.getElementById("f_store_name").value = "";
-      document.getElementById("f_role").value = "owner";
+      const roleSelectReset = document.getElementById("f_role");
+      const masterOptReset = roleSelectReset.querySelector('option[value="master"]');
+      if (masterOptReset) masterOptReset.remove();
+      roleSelectReset.disabled = false;
+      roleSelectReset.value = "owner";
       document.getElementById("f_password").value = "";
       document.getElementById("passwordLabel").textContent = "비밀번호";
       document.getElementById("passwordHint").textContent = "비밀번호는 6자 이상으로 입력해주세요.";
@@ -122,7 +126,22 @@
       document.getElementById("f_email").value = emailToId(a.email || "");
       document.getElementById("f_email").disabled = true;
       document.getElementById("f_store_name").value = a.store_name || "";
-      document.getElementById("f_role").value = a.role;
+      // 마스터 권한은 이 화면에서 부여/변경할 수 없고 Supabase에서 직접 관리합니다.
+      // 이미 마스터인 계정을 수정할 때는 표시만 해주고(값이 바뀌지 않도록 잠금) 드롭다운을 비활성화합니다.
+      const roleSelect = document.getElementById("f_role");
+      if (a.role === "master") {
+        if (!roleSelect.querySelector('option[value="master"]')) {
+          const opt = document.createElement("option");
+          opt.value = "master";
+          opt.textContent = "마스터 (Supabase에서 직접 관리)";
+          roleSelect.appendChild(opt);
+        }
+        roleSelect.value = "master";
+        roleSelect.disabled = true;
+      } else {
+        roleSelect.disabled = false;
+        roleSelect.value = a.role;
+      }
       document.getElementById("f_password").value = "";
       document.getElementById("passwordLabel").textContent = "새 비밀번호 (선택)";
       document.getElementById("passwordHint").textContent = "비밀번호를 바꾸지 않으려면 비워두세요. (보안상 현재 비밀번호는 조회할 수 없어요. 확인이 필요하면 여기에 새 비밀번호를 입력해서 바꿔주세요.)";
@@ -156,7 +175,7 @@
       listEl.innerHTML = filtered.map((a) => `
         <div class="card resource-item" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
           <div style="display:flex; align-items:center; gap:14px; flex-grow:1; min-width:0; flex-wrap:wrap;">
-            <span class="pill ${a.role === "visor" ? "pill-accent" : "pill-neutral"}">${ROLE_LABEL[a.role] || a.role}</span>
+            <span class="pill ${a.role === "master" ? "pill-amber-solid" : a.role === "visor" ? "pill-accent" : "pill-neutral"}">${ROLE_LABEL[a.role] || a.role}</span>
             <span style="font-size:15px; font-weight:600;">${escapeHtml(a.store_name)}</span>
             <span style="font-size:13px; color:var(--muted);">${escapeHtml(emailToId(a.email || ""))}</span>
             ${a.id === (profileRef && profileRef.id) ? '<span class="pill pill-neutral" style="font-size:11px;">나</span>' : ""}
@@ -317,7 +336,10 @@
         clearFormError(errEl);
         const loginId = document.getElementById("f_email").value.trim();
         const store_name = document.getElementById("f_store_name").value.trim();
-        const role = document.getElementById("f_role").value;
+        const roleFieldEl = document.getElementById("f_role");
+        // 마스터 계정을 수정할 때는 role 자체를 요청에 담지 않아서(서버가 기존 값을 그대로 유지),
+        // 이 화면을 통해 마스터 권한이 실수로 바뀌는 일이 없도록 합니다.
+        const role = roleFieldEl.disabled ? undefined : roleFieldEl.value;
         const password = document.getElementById("f_password").value;
 
         if (!loginId || !store_name) {
