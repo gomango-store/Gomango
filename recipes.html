@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>레시피 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921e">
+<link rel="stylesheet" href="assets/style.css?v=20260921g">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -67,8 +67,8 @@
     <div class="recipe-grid" id="recipeGrid"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921e"></script>
-  <script src="assets/app.js?v=20260921e"></script>
+  <script src="assets/supabaseClient.js?v=20260921g"></script>
+  <script src="assets/app.js?v=20260921g"></script>
   <script>
     let allRecipes = [];
     let currentFilter = "전체";
@@ -125,7 +125,7 @@
                 </div>
               </div>` : ""}
             ${r.pdf_url ? `<a href="${escapeHtml(r.pdf_url)}" target="_blank" rel="noopener" class="btn-primary" style="justify-content:center;">레시피 카드 PDF 다운로드</a>` : ""}
-            ${isVisor(profileRef) ? `
+            ${canManagePost(profileRef, r, "author_id") ? `
               <div class="row-actions" style="justify-content:flex-end;">
                 <button class="btn-edit" id="detailEditBtn">수정</button>
                 <button class="btn-delete" id="detailDeleteBtn">삭제</button>
@@ -158,7 +158,7 @@
           <div class="recipe-card-body">
             <div style="font-size:15px; font-weight:700;">${escapeHtml(r.title)}</div>
             <div style="font-size:12.5px; color:var(--muted);">${escapeHtml(r.category)} · ${metaDateLabel(r)}</div>
-            ${isVisor(profileRef) ? `
+            ${canManagePost(profileRef, r, "author_id") ? `
               <div class="row-actions" data-card-actions="1" style="margin-top:6px;">
                 <button class="btn-edit" data-id="${r.id}" data-action="edit">수정</button>
                 <button class="btn-delete" data-id="${r.id}" data-action="delete">삭제</button>
