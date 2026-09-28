@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>공지사항 - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921f">
+<link rel="stylesheet" href="assets/style.css?v=20260921g">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -61,8 +61,8 @@
     <div id="noticeList" style="display:flex; flex-direction:column;"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921f"></script>
-  <script src="assets/app.js?v=20260921f"></script>
+  <script src="assets/supabaseClient.js?v=20260921g"></script>
+  <script src="assets/app.js?v=20260921g"></script>
   <script>
     let profileRef = null;
     let editingId = null;
@@ -127,7 +127,7 @@
               </a>
             </div>
           ` : ""}
-          ${isVisor(profileRef) ? `
+          ${canManagePost(profileRef, n, "author_id") ? `
             <div class="row-actions" style="margin-top:12px;">
               <button class="btn-edit" data-id="${n.id}" data-action="edit">수정</button>
               <button class="btn-delete" data-id="${n.id}" data-action="delete">삭제</button>
