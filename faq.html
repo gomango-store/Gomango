@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FAQ - GOMANGO 점주 운영 게시판</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/style.css?v=20260921e">
+<link rel="stylesheet" href="assets/style.css?v=20260921g">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -43,8 +43,8 @@
     <div id="faqList" style="display:flex; flex-direction:column; gap:12px;"><div class="empty-state">불러오는 중...</div></div>
   </main>
 
-  <script src="assets/supabaseClient.js?v=20260921e"></script>
-  <script src="assets/app.js?v=20260921e"></script>
+  <script src="assets/supabaseClient.js?v=20260921g"></script>
+  <script src="assets/app.js?v=20260921g"></script>
   <script>
     let profileRef = null;
     let allFaqs = [];
@@ -93,7 +93,7 @@
           </div>
           ${isOpen ? `
             <div style="font-size:14px; color:var(--ink-soft); line-height:1.6; white-space:pre-line;">A. ${escapeHtml(f.answer)}</div>
-            ${isVisor(profileRef) ? `
+            ${canManagePost(profileRef, f, "author_id") ? `
               <div class="row-actions" style="margin-top:4px;">
                 <button class="btn-edit" data-id="${f.id}" data-action="edit">수정</button>
                 <button class="btn-delete" data-id="${f.id}" data-action="delete">삭제</button>
@@ -177,7 +177,7 @@
         }
         const { error } = faqEditingId
           ? await sb.from("faqs").update({ question, answer }).eq("id", faqEditingId)
-          : await sb.from("faqs").insert({ question, answer });
+          : await sb.from("faqs").insert({ question, answer, author_id: profileRef.id });
         if (error) {
           showFormError(errEl, "저장에 실패했습니다: " + error.message);
           return;
