@@ -40,7 +40,26 @@ async function requireAuth() {
 }
 
 function isVisor(profile) {
-  return !!profile && profile.role === "visor";
+  return !!profile && (profile.role === "visor" || profile.role === "master");
+}
+
+// 마스터는 바이저 중에서도 모든 게시글을 수정/삭제할 수 있는 최상위 권한입니다.
+// (앱 화면에서는 마스터 계정을 만들거나 승급할 수 없고, Supabase에서 직접 role 값을
+//  "master"로 바꿔야만 부여됩니다.)
+function isMaster(profile) {
+  return !!profile && profile.role === "master";
+}
+
+// 게시글 하나에 대해 지금 로그인한 사람이 수정/삭제할 수 있는지 판단하는 공용 함수입니다.
+// - 마스터: 누가 작성했든 전부 가능
+// - 바이저: 본인이 작성한 글만 가능 (다른 바이저가 작성한 글은 불가능)
+// - 점주: 이 함수를 쓰는 화면들은 애초에 점주에게 수정/삭제 버튼 자체를 보여주지 않습니다.
+// field: 작성자를 나타내는 컬럼 이름 (기본 "author_id", 건의함은 "owner_id")
+function canManagePost(profile, row, field) {
+  field = field || "author_id";
+  if (!profile || !row) return false;
+  if (isMaster(profile)) return true;
+  return isVisor(profile) && row[field] === profile.id;
 }
 
 // ============================================================
